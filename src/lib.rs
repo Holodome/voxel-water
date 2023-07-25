@@ -1,6 +1,11 @@
+use voxel_water::{DisplayVertex, SphereUniform, WorldUniform, DISPLAY_VERTICES};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+mod math;
+mod voxel_water;
+
+use crate::math::*;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -8,49 +13,6 @@ use winit::{
     window::Window,
     window::WindowBuilder,
 };
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [0.0, 0.5, 0.0],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.0],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.0],
-        color: [0.0, 0.0, 1.0],
-    },
-];
 
 struct State {
     surface: wgpu::Surface,
@@ -63,6 +25,11 @@ struct State {
     vertex_buffer: wgpu::Buffer,
 
     num_vertices: u32,
+    world: WorldUniform,
+    spheres: Vec<SphereUniform>,
+    world_buffer: wgpu::Buffer,
+    spheres_buffer: wgpu::Buffer,
+    ray_tracing_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -120,12 +87,95 @@ impl State {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
+        let num_vertices = DISPLAY_VERTICES.len() as u32;
+        let focus_dist = 10.0;
+        let camera_at = Point3::new(10.0, 10.0, 10.0);
+        let look_at = Point3::new(0.0, 0.0, 0.0);
+        let z = (camera_at - look_at).normalize();
+        let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
+        let y = z.cross(&x).normalize();
+        let viewport_width = (60.0_f32.to_radians() * 0.5).tan() * 2.0;
+        let viewport_height = viewport_width;
+        let camera_horizontal = x * viewport_width;
+        let camera_vertical = y * viewport_height;
+        let camera_lower_left =
+            camera_at - (camera_horizontal * 0.5) - (camera_vertical * 0.5) - (z * focus_dist);
+
+        let world = WorldUniform {
+            camera_at,
+            _pad0: 0,
+            camera_lower_left,
+            _pad1: 0,
+            camera_horizontal,
+            _pad2: 0,
+            camera_vertical,
+            _pad3: 0,
+        };
+        let world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("world buffer"),
+            contents: bytemuck::cast_slice(&[world]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let spheres = vec![SphereUniform {
+            point: Point3::new(0.0, 0.0, 0.0),
+            color: Vector3::new(1.0, 0.0, 1.0),
+            radius: 1.0,
+            padding: 0,
+        }];
+        let spheres_size =
+            wgpu::BufferSize::new((spheres.len() * std::mem::size_of::<SphereUniform>()) as _);
+        let spheres_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("spheres buffer"),
+            contents: bytemuck::cast_slice(spheres.as_slice()),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let ray_tracing_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("ray tracing bind group layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: spheres_size,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ray tracing bind group"),
+            layout: &ray_tracing_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: world_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: spheres_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render pipeline layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&ray_tracing_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -134,7 +184,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
+                buffers: &[DisplayVertex::desc()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -165,11 +215,9 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("vertex buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
+            contents: bytemuck::cast_slice(DISPLAY_VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
-
-        let num_vertices = VERTICES.len() as u32;
 
         Self {
             window,
@@ -181,6 +229,11 @@ impl State {
             render_pipeline,
             vertex_buffer,
             num_vertices,
+            world,
+            spheres,
+            world_buffer,
+            spheres_buffer,
+            ray_tracing_bind_group,
         }
     }
 
@@ -231,6 +284,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.ray_tracing_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..self.num_vertices, 0..1);
         }
@@ -253,7 +307,10 @@ pub async fn run() {
         }
     }
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_inner_size(winit::dpi::LogicalSize::new(480, 480))
+        .build(&event_loop)
+        .unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {
