@@ -7,6 +7,7 @@ use winit::{
 };
 
 mod math;
+mod perlin;
 mod renderer;
 mod voxel_water;
 

@@ -1,69 +1,47 @@
 use crate::math::*;
+use crate::perlin::Perlin;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DisplayVertex {
-    pub position: Point2,
+#[derive(Clone, Copy)]
+enum Cell {
+    None,
+    Ground,
 }
 
-impl DisplayVertex {
-    const ATTRS: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0 => Float32x2];
+struct Map {
+    x: usize,
+    y: usize,
+    z: usize,
+    cells: Vec<Cell>,
+}
 
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<DisplayVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRS,
-        }
+impl Map {
+    pub fn at(&self, x: usize, y: usize, z: usize) -> Cell {
+        self.cells[z * (self.x * self.y) + y * self.x + x]
     }
-}
 
-pub const DISPLAY_VERTICES: &[DisplayVertex] = &[
-    DisplayVertex {
-        position: Point2::new(0.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 1.0),
-    },
-    DisplayVertex {
-        position: Point2::new(0.0, 1.0),
-    },
-    DisplayVertex {
-        position: Point2::new(0.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 1.0),
-    },
-];
+    pub fn at_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Cell {
+        &mut self.cells[z * (self.x * self.y) + y * self.x + x]
+    }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct SphereUniform {
-    pub point: Point3,
-    pub radius: f32,
-    pub color: Vector3,
-    pub padding: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct WorldUniform {
-    pub camera_at: Point3,
-    pub _pad0: u32,
-    pub camera_lower_left: Point3,
-    pub _pad1: u32,
-    pub camera_horizontal: Vector3,
-    pub _pad2: u32,
-    pub camera_vertical: Vector3,
-    pub _pad3: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Triangle {
-    p: [Point3; 3],
-    n: Vector3,
+    pub fn generate_random(x: usize, y: usize, z: usize, perlin: &mut Perlin) -> Self {
+        let cells = vec![Cell::None; x * y * z];
+        let mut map = Self { x, y, z, cells };
+        for px in 0..x {
+            for pz in 0..z {
+                let p = Vector3::new(px as f32, 0.0, pz as f32);
+                let perlin_value = perlin.turb(p, 4);
+                let height = (perlin_value.sin() + 1.0) * 0.5 * (y as f32);
+                let height = height as usize;
+                for py in 0..height {
+                    let cell = if py < height {
+                        Cell::Ground
+                    } else {
+                        Cell::None
+                    };
+                    *map.at_mut(px, py, pz) = cell;
+                }
+            }
+        }
+        map
+    }
 }
