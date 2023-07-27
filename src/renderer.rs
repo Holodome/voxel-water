@@ -1,4 +1,5 @@
 use crate::math::*;
+use crate::voxel_water::{Cell, Map};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -48,15 +49,6 @@ pub const DISPLAY_VERTICES: &[DisplayVertex] = &[
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct SphereUniform {
-    pub point: Point3,
-    pub radius: f32,
-    pub color: Vector3,
-    pub padding: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct WorldUniform {
     pub camera_at: Point3,
     pub _pad0: u32,
@@ -66,13 +58,6 @@ pub struct WorldUniform {
     pub _pad2: u32,
     pub camera_vertical: Vector3,
     pub _pad3: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Triangle {
-    p: [Point3; 3],
-    n: Vector3,
 }
 
 pub struct State {
@@ -87,9 +72,7 @@ pub struct State {
 
     num_vertices: u32,
     world: WorldUniform,
-    spheres: Vec<SphereUniform>,
     world_buffer: wgpu::Buffer,
-    spheres_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
 }
 
@@ -179,58 +162,65 @@ impl State {
             contents: bytemuck::cast_slice(&[world]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let spheres = vec![SphereUniform {
-            point: Point3::new(0.0, 0.0, 0.0),
-            color: Vector3::new(1.0, 0.0, 1.0),
-            radius: 1.0,
-            padding: 0,
-        }];
-        let spheres_size =
-            wgpu::BufferSize::new((spheres.len() * std::mem::size_of::<SphereUniform>()) as _);
-        let spheres_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("spheres buffer"),
-            contents: bytemuck::cast_slice(spheres.as_slice()),
-            usage: wgpu::BufferUsages::STORAGE,
+        let voxel_map = Map::random(10, 10, 10);
+        let voxel_texture_size = wgpu::Extent3d {
+            width: voxel_map.x() as u32,
+            height: voxel_map.y() as u32,
+            depth_or_array_layers: voxel_map.z() as u32,
+        };
+        let voxel_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: voxel_texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            format: wgpu::TextureFormat::R32Uint,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("voxel texture"),
+            view_formats: &[],
         });
+        let voxel_data = voxel_map
+            .cells()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect::<Vec<u32>>();
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &voxel_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            bytemuck::cast_slice(&voxel_data),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: (4 * voxel_texture_size.width).into(),
+                rows_per_image: voxel_texture_size.height.into(),
+            },
+            voxel_texture_size,
+        );
+
         let ray_tracing_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("ray tracing bind group layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: spheres_size,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ray tracing bind group"),
             layout: &ray_tracing_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: world_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: spheres_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: world_buffer.as_entire_binding(),
+            }],
         });
 
         let render_pipeline_layout =
@@ -291,9 +281,7 @@ impl State {
             vertex_buffer,
             num_vertices,
             world,
-            spheres,
             world_buffer,
-            spheres_buffer,
             ray_tracing_bind_group,
         }
     }

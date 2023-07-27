@@ -16,12 +16,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
-struct Sphere {
-    point: vec3f,
-    radius: f32,
-    color: vec3f,
-};
-
 struct WorldUniform {
     camera_at: vec3f,
     camera_lower_left: vec3f,
@@ -33,7 +27,10 @@ struct WorldUniform {
 var<uniform> world: WorldUniform;
 
 @group(0) @binding(1)
-var<storage, read> spheres: array<Sphere>;
+var voxel_data: texture_3d<u32>;
+
+@group(1) @binding(2)
+var voxel_data_sampler: sampler;
 
 struct Ray {
     origin: vec3f,
@@ -44,24 +41,8 @@ fn ray_at(ray: Ray, t: f32) -> vec3f {
     return ray.origin + ray.direction * t;
 }
 
-fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> bool {
-    let oc = ray.origin - center;
-    let a = dot(ray.direction, ray.direction);
-    let b = 2.0 * dot(oc, ray.direction);
-    let c = dot(oc, oc) - radius * radius;
-    let desc = b * b - 4.0 * a * c;
-    return desc > 0.0;
-}
 
 fn ray_color(ray: Ray) -> vec3f {
-    let count = arrayLength(&spheres);
-    for (var i: u32 = 0u; i < count; i++) {
-        let sphere = spheres[i];
-        if (hit_sphere(sphere.point, sphere.radius, ray)) {
-            return sphere.color;
-        }
-    }
-
     let unit_direction = normalize(ray.direction);
     let t = 0.5 * (unit_direction.y + 1.0);
     return (1.0 - t) * vec3f(1.0, 1.0, 1.0) + t * vec3f(0.5, 0.7, 1.0);

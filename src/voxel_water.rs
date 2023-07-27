@@ -3,12 +3,18 @@ use crate::perlin::Perlin;
 use rand::Rng;
 
 #[derive(Clone, Copy)]
-enum Cell {
-    None,
-    Ground,
+pub enum Cell {
+    None = 0,
+    Ground = 1,
 }
 
-struct Map {
+impl From<Cell> for u32 {
+    fn from(cell: Cell) -> Self {
+        cell as Self
+    }
+}
+
+pub struct Map {
     x: usize,
     y: usize,
     z: usize,
@@ -16,6 +22,19 @@ struct Map {
 }
 
 impl Map {
+    pub fn x(&self) -> usize {
+        self.x
+    }
+    pub fn y(&self) -> usize {
+        self.y
+    }
+    pub fn z(&self) -> usize {
+        self.z
+    }
+    pub fn cells(&self) -> &[Cell] {
+        &self.cells
+    }
+
     pub fn at(&self, x: usize, y: usize, z: usize) -> Cell {
         self.cells[z * (self.x * self.y) + y * self.x + x]
     }
