@@ -135,7 +135,7 @@ impl State {
         });
         let num_vertices = DISPLAY_VERTICES.len() as u32;
         let focus_dist = 10.0;
-        let camera_at = Point3::new(10.0, 10.0, 10.0);
+        let camera_at = Point3::new(10.0, 10.0, 10.0) * 100.0;
         let look_at = Point3::new(0.0, 0.0, 0.0);
         let z = (camera_at - look_at).normalize();
         let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
@@ -173,7 +173,7 @@ impl State {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D3,
-            format: wgpu::TextureFormat::R32Uint,
+            format: wgpu::TextureFormat::R8Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: Some("voxel texture"),
             view_formats: &[],
@@ -183,7 +183,8 @@ impl State {
             .iter()
             .copied()
             .map(Into::into)
-            .collect::<Vec<u32>>();
+            .map(|it: u32| it as u8)
+            .collect::<Vec<u8>>();
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &voxel_texture,
@@ -194,33 +195,71 @@ impl State {
             bytemuck::cast_slice(&voxel_data),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: (4 * voxel_texture_size.width).into(),
+                bytes_per_row: voxel_texture_size.width.into(),
                 rows_per_image: voxel_texture_size.height.into(),
             },
             voxel_texture_size,
         );
+        let voxel_texture_view = voxel_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let voxel_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let ray_tracing_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("ray tracing bind group layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Uint,
+                            view_dimension: wgpu::TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ray tracing bind group"),
             layout: &ray_tracing_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: world_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: world_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&voxel_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&voxel_sampler),
+                },
+            ],
         });
 
         let render_pipeline_layout =

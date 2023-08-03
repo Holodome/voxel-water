@@ -31,10 +31,7 @@ struct WorldUniform {
 var<uniform> world: WorldUniform;
 
 @group(0) @binding(1)
-var voxel_data: texture_3d<f32>;
-
-@group(1) @binding(2)
-var voxel_data_sampler: sampler;
+var voxel_data: texture_3d<u32>;
 
 struct Material {
     color: vec3f,
@@ -140,7 +137,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
             current_voxel.z += stepi.z;
         }
 
-        record.id = u32(textureSample(voxel_data, voxel_data_sampler, vec3f(current_voxel)).r);
+        record.id = textureLoad(voxel_data, current_voxel, 0).r;
         if (record.id != 0u) {
             record.pos = ray_at(ray, record.t);
             break;
