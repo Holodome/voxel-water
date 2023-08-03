@@ -1,6 +1,6 @@
 const VOXEL_SIZE: f32 = 1.0;
 const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 8;
+const MAX_BOUNCE_COUNT: i32 = 4;
 
 struct VertexInput {
     @location(0) uv: vec2f
@@ -46,7 +46,8 @@ struct HitRecord {
     normal: vec3f,
     pos: vec3f,
     t: f32,
-    id: u32
+    id: u32,
+    has_hit: bool
 };
 
 struct ScatterRecord {
@@ -104,13 +105,23 @@ fn ray_at(ray: Ray, t: f32) -> vec3f {
     return ray.origin + ray.direction * t;
 }
 
+fn safe_sign(x: f32) -> f32 {
+    if (x <= 0.0) {
+        return -1.0;
+    }
+    return 1.0;
+}
+
 fn voxel_traverse(ray: Ray) -> HitRecord {
     var record: HitRecord;
-    record.t = 1.0 / 0.0;
     let origin = ray.origin;
     let direction = normalize(ray.direction);
 
-    let step = sign(direction + 0.000001);
+    let step = vec3f(
+        safe_sign(direction.x),
+        safe_sign(direction.y),
+        safe_sign(direction.z),
+    );
     let stepi = vec3i(step);
     var current_voxel = vec3i(floor(origin / VOXEL_SIZE));
     let next_bound = vec3f(current_voxel + vec3i((step + vec3f(1.0)) * 0.5)) * VOXEL_SIZE;
@@ -139,12 +150,13 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
         record.id = textureLoad(voxel_data, current_voxel, 0).r;
         if (record.id != 0u) {
-            record.pos = ray_at(ray, record.t);
+            record.pos = ray_at(ray, record.t + 0.0001);
+            record.has_hit = true;
             break;
         }
 
         i += 1;
-        if (i > MAXIMUM_TRAVERSAL_DISTANCE) {
+        if (i >= MAXIMUM_TRAVERSAL_DISTANCE) {
             break;
         }
     }
@@ -156,7 +168,7 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
     var srec: ScatterRecord;
 
     var material: Material;
-    material.color = vec3f(0.0, 1.0, 0.0);
+    material.color = vec3f(0.0, 0.8, 0.0);
 
     let target_vec = hrec.pos + hrec.normal + random_in_unit_sphere();
     srec.direction = target_vec - hrec.pos;
@@ -172,22 +184,22 @@ fn background(ray: Ray) -> vec3f {
 }
 
 fn trace(ray_: Ray) -> vec3f {
-    var throughput = vec3f(1.0);
+    var result = vec3f(1.0);
     var ray = ray_;
 
     for (var i: i32 = 0; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
-        if (hrec.t != hrec.t) {
-            return background(ray);
+        if (!hrec.has_hit) {
+            break;
         }
 
         let srec = scatter(ray, hrec);
-        throughput *= srec.weight;
+        result *= srec.weight;
         ray.origin = hrec.pos;
         ray.direction = srec.direction;
     }
 
-    return throughput;
+    return result;
 }
 
 fn ray_color(ray: Ray) -> vec3f {
@@ -200,8 +212,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var ray: Ray;
     ray.origin = world.camera_at;
-    ray.direction = world.camera_lower_left + in.uv.x * world.camera_horizontal 
-        + in.uv.y * world.camera_vertical;
+    ray.direction = normalize(world.camera_lower_left + in.uv.x * world.camera_horizontal 
+        + in.uv.y * world.camera_vertical - world.camera_at);
 
     return vec4f(ray_color(ray), 1.0);
 }

@@ -74,6 +74,7 @@ pub struct State {
     world: WorldUniform,
     world_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
+    last_time: std::time::SystemTime,
 }
 
 impl State {
@@ -123,7 +124,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -135,7 +136,7 @@ impl State {
         });
         let num_vertices = DISPLAY_VERTICES.len() as u32;
         let focus_dist = 10.0;
-        let camera_at = Point3::new(10.0, 10.0, 10.0) * 100.0;
+        let camera_at = Point3::new(10.0, 10.0, 10.0) * 5.0;
         let look_at = Point3::new(0.0, 0.0, 0.0);
         let z = (camera_at - look_at).normalize();
         let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
@@ -322,6 +323,7 @@ impl State {
             world,
             world_buffer,
             ray_tracing_bind_group,
+            last_time: std::time::SystemTime::now(),
         }
     }
 
@@ -379,6 +381,9 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        let new_time = std::time::SystemTime::now();
+        println!("time {:?}", new_time.duration_since(self.last_time));
+        self.last_time = new_time;
 
         Ok(())
     }
