@@ -1,5 +1,6 @@
 use crate::math::*;
 use crate::voxel_water::{Cell, Map};
+use rand::Rng;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -73,7 +74,10 @@ pub struct State {
     num_vertices: u32,
     world: WorldUniform,
     world_buffer: wgpu::Buffer,
+    rng_seed: u32,
+    rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
+
     last_time: std::time::SystemTime,
 }
 
@@ -163,6 +167,12 @@ impl State {
             contents: bytemuck::cast_slice(&[world]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        let rng_seed = rand::thread_rng().gen::<u32>();
+        let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("rng buffer"),
+            contents: bytemuck::bytes_of(&rng_seed),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let voxel_map = Map::random(10, 10, 10);
         let voxel_texture_size = wgpu::Extent3d {
             width: voxel_map.x() as u32,
@@ -202,15 +212,6 @@ impl State {
             voxel_texture_size,
         );
         let voxel_texture_view = voxel_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let voxel_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
 
         let ray_tracing_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -239,7 +240,11 @@ impl State {
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
                         count: None,
                     },
                 ],
@@ -258,7 +263,7 @@ impl State {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&voxel_sampler),
+                    resource: rng_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -322,6 +327,8 @@ impl State {
             num_vertices,
             world,
             world_buffer,
+            rng_seed,
+            rng_buffer,
             ray_tracing_bind_group,
             last_time: std::time::SystemTime::now(),
         }
@@ -344,7 +351,18 @@ impl State {
         false
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        let new_time = std::time::SystemTime::now();
+        println!("time {:?}", new_time.duration_since(self.last_time));
+        self.last_time = new_time;
+        self.rng_seed = self
+            .last_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_micros() as u32;
+        self.queue
+            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
@@ -381,9 +399,6 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-        let new_time = std::time::SystemTime::now();
-        println!("time {:?}", new_time.duration_since(self.last_time));
-        self.last_time = new_time;
 
         Ok(())
     }
