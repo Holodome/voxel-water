@@ -1,15 +1,39 @@
-use crate::math::*;
 use crate::renderer::{CameraDTO, MapDTO, Renderer, WorldDTO};
 use crate::voxel_water::Map;
+use crate::{math::*, renderer};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
+#[derive(Debug)]
+struct TimeRngProvider {
+    last_time: std::time::SystemTime,
+}
+
+impl TimeRngProvider {
+    fn new() -> Self {
+        Self {
+            last_time: std::time::SystemTime::now(),
+        }
+    }
+}
+
+impl renderer::RngProvider for TimeRngProvider {
+    fn update(&mut self) -> u32 {
+        let new_time = std::time::SystemTime::now();
+        self.last_time = new_time;
+        self.last_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_micros() as u32
+    }
+}
+
 pub struct App {
     map: Map,
-    renderer: Renderer,
+    renderer: Renderer<TimeRngProvider>,
     event_loop: EventLoop<()>,
 }
 
@@ -74,7 +98,8 @@ impl App {
             camera: camera_dto,
             map: map_dto,
         };
-        let renderer = Renderer::new(window, &dto).await;
+        let rng_provider = TimeRngProvider::new();
+        let renderer = Renderer::new(window, &dto, rng_provider).await;
 
         Self {
             map,
@@ -90,7 +115,7 @@ impl App {
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                } if window_id == self.renderer.window_id() => {
+                } if window_id == self.renderer.window().id() => {
                     if !self.renderer.input(event) {
                         match event {
                             WindowEvent::Resized(phys_size) => {

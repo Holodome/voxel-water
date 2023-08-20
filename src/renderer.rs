@@ -1,5 +1,4 @@
 use crate::math::*;
-use crate::voxel_water::Map;
 use rand::Rng;
 use wgpu::util::DeviceExt;
 use winit::{event::*, window::Window};
@@ -26,7 +25,11 @@ pub struct WorldDTO<'a> {
     pub map: MapDTO<'a>,
 }
 
-pub struct Renderer {
+pub trait RngProvider {
+    fn update(&mut self) -> u32;
+}
+
+pub struct Renderer<Rng> {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -43,11 +46,14 @@ pub struct Renderer {
     rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
 
-    last_time: std::time::SystemTime,
+    rng_provider: Rng,
 }
 
-impl Renderer {
-    pub async fn new<'a>(window: Window, dto: &WorldDTO<'a>) -> Self {
+impl<Rng> Renderer<Rng>
+where
+    Rng: RngProvider,
+{
+    pub async fn new<'a>(window: Window, dto: &WorldDTO<'a>, mut rng_provider: Rng) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -105,22 +111,13 @@ impl Renderer {
         });
         let num_vertices = DISPLAY_VERTICES.len() as u32;
 
-        let world = WorldUniform {
-            camera_at: dto.camera.at,
-            _pad0: 0,
-            camera_lower_left: dto.camera.lower_left,
-            _pad1: 0,
-            camera_horizontal: dto.camera.horizontal,
-            _pad2: 0,
-            camera_vertical: dto.camera.vertical,
-            _pad3: 0,
-        };
+        let world = WorldUniform::from_dto(&dto.camera);
         let world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("world buffer"),
             contents: bytemuck::cast_slice(&[world]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let rng_seed = rand::thread_rng().gen::<u32>();
+        let rng_seed = rng_provider.update();
         let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rng buffer"),
             contents: bytemuck::bytes_of(&rng_seed),
@@ -275,7 +272,7 @@ impl Renderer {
             rng_seed,
             rng_buffer,
             ray_tracing_bind_group,
-            last_time: std::time::SystemTime::now(),
+            rng_provider,
         }
     }
 
@@ -300,17 +297,9 @@ impl Renderer {
     }
 
     pub fn update(&mut self) {
-        let new_time = std::time::SystemTime::now();
-        let duration = new_time.duration_since(self.last_time).unwrap_or_default();
-        println!("time {:?}", duration);
-        self.last_time = new_time;
-        self.rng_seed = self
-            .last_time
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros() as u32;
-        // self.queue
-        //     .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
+        self.rng_seed = self.rng_provider.update();
+        self.queue
+            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -350,10 +339,6 @@ impl Renderer {
         output.present();
 
         Ok(())
-    }
-
-    pub fn window_id(&self) -> winit::window::WindowId {
-        self.window.id()
     }
 }
 
@@ -407,4 +392,19 @@ struct WorldUniform {
     pub _pad2: u32,
     pub camera_vertical: Vector3,
     pub _pad3: u32,
+}
+
+impl WorldUniform {
+    fn from_dto(dto: &CameraDTO) -> Self {
+        Self {
+            camera_at: dto.at,
+            _pad0: 0,
+            camera_lower_left: dto.lower_left,
+            _pad1: 0,
+            camera_horizontal: dto.horizontal,
+            _pad2: 0,
+            camera_vertical: dto.vertical,
+            _pad3: 0,
+        }
+    }
 }
