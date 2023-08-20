@@ -3,6 +3,59 @@ use crate::perlin::Perlin;
 use crate::renderer::{CameraDTO, MapDTO};
 use rand::Rng;
 
+#[derive(Debug, Clone)]
+pub struct CameraParams {
+    pub look_from: Point3,
+    pub look_at: Point3,
+    pub up: Vector3,
+    pub aspect_ratio: f32,
+    pub vfov: f32,
+    pub focus_dist: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct Camera {
+    orig: Point3,
+    x: Vector3,
+    y: Vector3,
+    z: Vector3,
+    vertical: Vector3,
+    horizontal: Vector3,
+    lower_left_corner: Point3,
+}
+
+impl Camera {
+    pub fn new(params: CameraParams) -> Self {
+        let z = (params.look_from - params.look_at).normalize();
+        let x = params.up.cross(&z).normalize();
+        let y = z.cross(&x).normalize();
+        let viewport_width = (params.vfov * 0.5).tan() * 2.0;
+        let viewport_height = viewport_width;
+        let horizontal = x * viewport_width;
+        let vertical = y * viewport_height;
+        let lower_left_corner =
+            params.look_from - (horizontal * 0.5) - (vertical * 0.5) - (z * params.focus_dist);
+        Self {
+            orig: params.look_from,
+            x,
+            y,
+            z,
+            vertical,
+            horizontal,
+            lower_left_corner,
+        }
+    }
+
+    pub fn to_dto(&self) -> CameraDTO {
+        CameraDTO {
+            at: self.orig,
+            lower_left: self.lower_left_corner,
+            horizontal: self.horizontal,
+            vertical: self.vertical,
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Clone, Copy)]
 pub enum Cell {
