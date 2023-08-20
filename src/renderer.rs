@@ -1,64 +1,29 @@
 use crate::math::*;
-use crate::voxel_water::{Cell, Map};
+use crate::voxel_water::Map;
 use rand::Rng;
 use wgpu::util::DeviceExt;
-use winit::{
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-    window::WindowBuilder,
-};
+use winit::{event::*, window::Window};
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DisplayVertex {
-    pub position: Point2,
+#[derive(Clone, Debug)]
+pub struct CameraDTO {
+    pub at: Point3,
+    pub lower_left: Point3,
+    pub horizontal: Vector3,
+    pub vertical: Vector3,
 }
 
-impl DisplayVertex {
-    const ATTRS: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0 => Float32x2];
-
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<DisplayVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRS,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct MapDTO<'a> {
+    pub x: usize,
+    pub y: usize,
+    pub z: usize,
+    pub cells: &'a [u8],
 }
 
-pub const DISPLAY_VERTICES: &[DisplayVertex] = &[
-    DisplayVertex {
-        position: Point2::new(0.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 1.0),
-    },
-    DisplayVertex {
-        position: Point2::new(0.0, 1.0),
-    },
-    DisplayVertex {
-        position: Point2::new(0.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 0.0),
-    },
-    DisplayVertex {
-        position: Point2::new(1.0, 1.0),
-    },
-];
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct WorldUniform {
-    pub camera_at: Point3,
-    pub _pad0: u32,
-    pub camera_lower_left: Point3,
-    pub _pad1: u32,
-    pub camera_horizontal: Vector3,
-    pub _pad2: u32,
-    pub camera_vertical: Vector3,
-    pub _pad3: u32,
+#[derive(Clone, Debug)]
+pub struct WorldDTO<'a> {
+    pub camera: CameraDTO,
+    pub map: MapDTO<'a>,
 }
 
 pub struct Renderer {
@@ -66,8 +31,8 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pub size: winit::dpi::PhysicalSize<u32>,
-    pub window: Window,
+    size: winit::dpi::PhysicalSize<u32>,
+    window: Window,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 
@@ -82,7 +47,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: Window) -> Self {
+    pub async fn new<'a>(window: Window, dto: &WorldDTO<'a>) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -139,27 +104,15 @@ impl Renderer {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
         let num_vertices = DISPLAY_VERTICES.len() as u32;
-        let focus_dist = 1.0;
-        let camera_at = Point3::new(10.0, 10.0, 10.0) * 1.5;
-        let look_at = Point3::new(0.0, 0.0, 0.0);
-        let z = (camera_at - look_at).normalize();
-        let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
-        let y = z.cross(&x).normalize();
-        let viewport_width = (60.0_f32.to_radians() * 0.5).tan() * 2.0;
-        let viewport_height = viewport_width;
-        let camera_horizontal = x * viewport_width;
-        let camera_vertical = y * viewport_height;
-        let camera_lower_left =
-            camera_at - (camera_horizontal * 0.5) - (camera_vertical * 0.5) - (z * focus_dist);
 
         let world = WorldUniform {
-            camera_at,
+            camera_at: dto.camera.at,
             _pad0: 0,
-            camera_lower_left,
+            camera_lower_left: dto.camera.lower_left,
             _pad1: 0,
-            camera_horizontal,
+            camera_horizontal: dto.camera.horizontal,
             _pad2: 0,
-            camera_vertical,
+            camera_vertical: dto.camera.vertical,
             _pad3: 0,
         };
         let world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -173,11 +126,10 @@ impl Renderer {
             contents: bytemuck::bytes_of(&rng_seed),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let voxel_map = Map::random(10, 10, 10);
         let voxel_texture_size = wgpu::Extent3d {
-            width: voxel_map.x() as u32,
-            height: voxel_map.y() as u32,
-            depth_or_array_layers: voxel_map.z() as u32,
+            width: dto.map.x as u32,
+            height: dto.map.y as u32,
+            depth_or_array_layers: dto.map.z as u32,
         };
         let voxel_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: voxel_texture_size,
@@ -189,13 +141,6 @@ impl Renderer {
             label: Some("voxel texture"),
             view_formats: &[],
         });
-        let voxel_data = voxel_map
-            .cells()
-            .iter()
-            .copied()
-            .map(Into::into)
-            .map(|it: u32| it as u8)
-            .collect::<Vec<u8>>();
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &voxel_texture,
@@ -203,7 +148,7 @@ impl Renderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            bytemuck::cast_slice(&voxel_data),
+            bytemuck::cast_slice(dto.map.cells),
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: voxel_texture_size.width.into(),
@@ -338,6 +283,9 @@ impl Renderer {
         &self.window
     }
 
+    pub fn handle_lost_frame(&mut self) {
+        self.resize(self.size);
+    }
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.surface.configure(&self.device, &self.config);
@@ -403,4 +351,60 @@ impl Renderer {
 
         Ok(())
     }
+
+    pub fn window_id(&self) -> winit::window::WindowId {
+        self.window.id()
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct DisplayVertex {
+    pub position: Point2,
+}
+
+impl DisplayVertex {
+    const ATTRS: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0 => Float32x2];
+
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<DisplayVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRS,
+        }
+    }
+}
+
+const DISPLAY_VERTICES: &[DisplayVertex] = &[
+    DisplayVertex {
+        position: Point2::new(0.0, 0.0),
+    },
+    DisplayVertex {
+        position: Point2::new(1.0, 1.0),
+    },
+    DisplayVertex {
+        position: Point2::new(0.0, 1.0),
+    },
+    DisplayVertex {
+        position: Point2::new(0.0, 0.0),
+    },
+    DisplayVertex {
+        position: Point2::new(1.0, 0.0),
+    },
+    DisplayVertex {
+        position: Point2::new(1.0, 1.0),
+    },
+];
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct WorldUniform {
+    pub camera_at: Point3,
+    pub _pad0: u32,
+    pub camera_lower_left: Point3,
+    pub _pad1: u32,
+    pub camera_horizontal: Vector3,
+    pub _pad2: u32,
+    pub camera_vertical: Vector3,
+    pub _pad3: u32,
 }

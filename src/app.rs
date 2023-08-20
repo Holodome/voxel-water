@@ -1,4 +1,6 @@
-use crate::renderer::Renderer;
+use crate::math::*;
+use crate::renderer::{CameraDTO, MapDTO, Renderer, WorldDTO};
+use crate::voxel_water::Map;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -6,6 +8,7 @@ use winit::{
 };
 
 pub struct App {
+    map: Map,
     renderer: Renderer,
     event_loop: EventLoop<()>,
 }
@@ -35,9 +38,46 @@ impl App {
                 .expect("Failed to create canvas");
         }
 
-        let renderer = Renderer::new(window).await;
+        let focus_dist = 1.0;
+        let camera_at = Point3::new(10.0, 10.0, 10.0) * 1.5;
+        let look_at = Point3::new(0.0, 0.0, 0.0);
+        let z = (camera_at - look_at).normalize();
+        let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
+        let y = z.cross(&x).normalize();
+        let viewport_width = (60.0_f32.to_radians() * 0.5).tan() * 2.0;
+        let viewport_height = viewport_width;
+        let camera_horizontal = x * viewport_width;
+        let camera_vertical = y * viewport_height;
+        let camera_lower_left =
+            camera_at - (camera_horizontal * 0.5) - (camera_vertical * 0.5) - (z * focus_dist);
+        let camera_dto = CameraDTO {
+            at: camera_at,
+            lower_left: camera_lower_left,
+            horizontal: camera_horizontal,
+            vertical: camera_vertical,
+        };
+        let map = Map::random(10, 10, 10);
+        let voxel_data = map
+            .cells()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .map(|it: u32| it as u8)
+            .collect::<Vec<u8>>();
+        let map_dto = MapDTO {
+            x: map.x(),
+            y: map.y(),
+            z: map.z(),
+            cells: &voxel_data,
+        };
+        let dto = WorldDTO {
+            camera: camera_dto,
+            map: map_dto,
+        };
+        let renderer = Renderer::new(window, &dto).await;
 
         Self {
+            map,
             renderer,
             event_loop,
         }
@@ -50,7 +90,7 @@ impl App {
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                } if window_id == self.renderer.window.id() => {
+                } if window_id == self.renderer.window_id() => {
                     if !self.renderer.input(event) {
                         match event {
                             WindowEvent::Resized(phys_size) => {
@@ -77,7 +117,7 @@ impl App {
                     self.renderer.update();
                     match self.renderer.render() {
                         Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => self.renderer.resize(self.renderer.size),
+                        Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
                         Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                         Err(e) => eprintln!("{:?}", e),
                     }
