@@ -4,55 +4,47 @@ use crate::renderer::{CameraDTO, MapDTO};
 use rand::Rng;
 
 #[derive(Debug, Clone)]
-pub struct CameraParams {
-    pub look_from: Point3,
-    pub look_at: Point3,
-    pub up: Vector3,
-    pub aspect_ratio: f32,
-    pub vfov: f32,
-    pub focus_dist: f32,
-}
-
-#[derive(Debug, Clone)]
 pub struct Camera {
-    orig: Point3,
-    x: Vector3,
-    y: Vector3,
-    z: Vector3,
-    vertical: Vector3,
-    horizontal: Vector3,
-    lower_left_corner: Point3,
+    aspect_ratio: f32,
+    vfov: f32,
+    znear: f32,
+    zfar: f32,
+
+    pitch: f32,
+    yaw: f32,
+    position: Point3,
+
+    world_matrix: Matrix4,
+    view_matrix: Matrix4,
+    projection_matrix: Matrix4,
+    inverse_projection_matrix: Matrix4,
 }
 
 impl Camera {
-    pub fn new(params: CameraParams) -> Self {
-        let z = (params.look_from - params.look_at).normalize();
-        let x = params.up.cross(&z).normalize();
-        let y = z.cross(&x).normalize();
-        let viewport_width = (params.vfov * 0.5).tan() * 2.0;
-        let viewport_height = viewport_width;
-        let horizontal = x * viewport_width;
-        let vertical = y * viewport_height;
-        let lower_left_corner =
-            params.look_from - (horizontal * 0.5) - (vertical * 0.5) - (z * params.focus_dist);
+    pub fn new(aspect_ratio: f32, vfov: f32, znear: f32, zfar: f32) -> Self {
+        let projection_matrix =
+            *nalgebra::Perspective3::new(aspect_ratio, vfov, znear, zfar).as_matrix();
+        let inverse_projection_matrix = projection_matrix.try_inverse().unwrap();
         Self {
-            orig: params.look_from,
-            x,
-            y,
-            z,
-            vertical,
-            horizontal,
-            lower_left_corner,
+            aspect_ratio,
+            vfov,
+            znear,
+            zfar,
+            pitch: 0.0,
+            yaw: 0.0,
+            position: Point3::new(0.0, 0.0, 0.0),
+            projection_matrix,
+            inverse_projection_matrix,
         }
+        //
     }
 
-    pub fn to_dto(&self) -> CameraDTO {
-        CameraDTO {
-            at: self.orig,
-            lower_left: self.lower_left_corner,
-            horizontal: self.horizontal,
-            vertical: self.vertical,
-        }
+    pub fn update(&mut self, yaw_d: f32, pitch_d: f32, dp: Vector2) {
+        self.pitch += pitch_d;
+        self.yaw += yaw_d;
+        let rotation_quat = Quat::from_axis_angle(&Vector3::x_axis(), self.pitch)
+            * Quat::from_axis_angle(axis, angle);
+        //
     }
 }
 

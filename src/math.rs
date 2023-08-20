@@ -4,6 +4,8 @@ pub type Vector3 = nalgebra::Vector3<f32>;
 pub type Point3 = nalgebra::Point3<f32>;
 pub type Vector4 = nalgebra::Vector4<f32>;
 pub type Point4 = nalgebra::Point4<f32>;
+pub type Matrix4 = nalgebra::Matrix4<f32>;
+pub type Quat = nalgebra::UnitQuaternion<f32>;
 
 pub trait RandNalgebra: rand::Rng {
     fn usize_range(&mut self, low: usize, high: usize) -> usize {

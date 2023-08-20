@@ -5,10 +5,8 @@ use winit::{event::*, window::Window};
 
 #[derive(Clone, Debug)]
 pub struct CameraDTO {
-    pub at: Point3,
-    pub lower_left: Point3,
-    pub horizontal: Vector3,
-    pub vertical: Vector3,
+    pub camera_matrix: Matrix4,
+    pub inverse_projection_matrix: Matrix4,
 }
 
 #[derive(Clone, Debug)]
@@ -39,10 +37,8 @@ pub struct Renderer<Rng> {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 
-    num_vertices: u32,
-    world: WorldUniform,
-    world_buffer: wgpu::Buffer,
-    rng_seed: u32,
+    camera_matrix: wgpu::Buffer,
+    inverse_projection_matrix: wgpu::Buffer,
     rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
 
@@ -109,18 +105,22 @@ where
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
-        let num_vertices = DISPLAY_VERTICES.len() as u32;
 
-        let world = WorldUniform::from_dto(&dto.camera);
-        let world_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("world buffer"),
-            contents: bytemuck::cast_slice(&[world]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
         let rng_seed = rng_provider.update();
         let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rng buffer"),
             contents: bytemuck::bytes_of(&rng_seed),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let inverse_projection_matrix =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("inverse projection matrix"),
+                contents: bytemuck::bytes_of(&dto.camera.inverse_projection_matrix),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let camera_matrix = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("camera matrix"),
+            contents: bytemuck::bytes_of(&dto.camera.inverse_projection_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let voxel_texture_size = wgpu::Extent3d {
@@ -162,16 +162,6 @@ where
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Uint,
                             view_dimension: wgpu::TextureViewDimension::D3,
@@ -180,8 +170,28 @@ where
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
-                        binding: 2,
+                        binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -197,15 +207,19 @@ where
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: world_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
                     resource: wgpu::BindingResource::TextureView(&voxel_texture_view),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 1,
                     resource: rng_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: inverse_projection_matrix.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: camera_matrix.as_entire_binding(),
                 },
             ],
         });
@@ -266,10 +280,8 @@ where
             size,
             render_pipeline,
             vertex_buffer,
-            num_vertices,
-            world,
-            world_buffer,
-            rng_seed,
+            camera_matrix,
+            inverse_projection_matrix,
             rng_buffer,
             ray_tracing_bind_group,
             rng_provider,
@@ -293,9 +305,9 @@ where
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.rng_seed = self.rng_provider.update();
+        let rng_seed = self.rng_provider.update();
         self.queue
-            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
+            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&rng_seed));
 
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
@@ -326,7 +338,7 @@ where
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.ray_tracing_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..self.num_vertices, 0..1);
+            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -374,31 +386,3 @@ const DISPLAY_VERTICES: &[DisplayVertex] = &[
         position: Point2::new(1.0, 1.0),
     },
 ];
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct WorldUniform {
-    pub camera_at: Point3,
-    pub _pad0: u32,
-    pub camera_lower_left: Point3,
-    pub _pad1: u32,
-    pub camera_horizontal: Vector3,
-    pub _pad2: u32,
-    pub camera_vertical: Vector3,
-    pub _pad3: u32,
-}
-
-impl WorldUniform {
-    fn from_dto(dto: &CameraDTO) -> Self {
-        Self {
-            camera_at: dto.at,
-            _pad0: 0,
-            camera_lower_left: dto.lower_left,
-            _pad1: 0,
-            camera_horizontal: dto.horizontal,
-            _pad2: 0,
-            camera_vertical: dto.vertical,
-            _pad3: 0,
-        }
-    }
-}

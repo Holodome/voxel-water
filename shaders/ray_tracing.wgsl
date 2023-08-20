@@ -35,16 +35,16 @@ const VOXEL_SIZE: f32 = 1.0;
 const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
 const MAX_BOUNCE_COUNT: i32 = 4;
 
-@group(0) @binding(1)
+@group(0) @binding(0)
 var voxel_data: texture_3d<u32>;
 
-@group(0) @binding(2) 
+@group(0) @binding(1) 
 var<uniform> random_seed: u32;
 
-@group(0) @binding(3) 
+@group(0) @binding(2) 
 var<uniform> inverse_projection_matrix: mat4x4f;
 
-@group(0) @binding(4)
+@group(0) @binding(3)
 var<uniform> camera_matrix: mat4x4f;
 
 @vertex 
