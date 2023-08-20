@@ -61,7 +61,7 @@ pub struct WorldUniform {
     pub _pad3: u32,
 }
 
-pub struct State {
+pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -81,7 +81,7 @@ pub struct State {
     last_time: std::time::SystemTime,
 }
 
-impl State {
+impl Renderer {
     pub async fn new(window: Window) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {

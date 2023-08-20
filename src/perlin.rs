@@ -26,7 +26,7 @@ impl Perlin {
 
     pub fn new(rng: &mut impl RandNalgebra) -> Self {
         let ranvec = (0..PERLIN_POINT_COUNT)
-            .map(|i| rng.vector3(-1.0, 1.0).normalize())
+            .map(|_| rng.vector3(-1.0, 1.0).normalize())
             .collect();
         let perm_x = Self::generate_perm(rng);
         let perm_y = Self::generate_perm(rng);
