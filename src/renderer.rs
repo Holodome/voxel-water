@@ -139,8 +139,8 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
         let num_vertices = DISPLAY_VERTICES.len() as u32;
-        let focus_dist = 10.0;
-        let camera_at = Point3::new(10.0, 10.0, 10.0) * 5.0;
+        let focus_dist = 1.0;
+        let camera_at = Point3::new(10.0, 10.0, 10.0) * 1.5;
         let look_at = Point3::new(0.0, 0.0, 0.0);
         let z = (camera_at - look_at).normalize();
         let x = Vector3::new(0.0, 1.0, 0.0).cross(&z).normalize();
@@ -353,15 +353,16 @@ impl State {
 
     pub fn update(&mut self) {
         let new_time = std::time::SystemTime::now();
-        println!("time {:?}", new_time.duration_since(self.last_time));
+        let duration = new_time.duration_since(self.last_time).unwrap_or_default();
+        println!("time {:?}", duration);
         self.last_time = new_time;
         self.rng_seed = self
             .last_time
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_micros() as u32;
-        self.queue
-            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
+        // self.queue
+        //     .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {

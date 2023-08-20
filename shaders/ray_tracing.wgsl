@@ -63,8 +63,8 @@ var<private> rng_state: u32;
 fn xorshift32(state: u32) -> u32 {
     var x = state;
     x ^= x << 13u;
-	x ^= x >> 17u;
-	x ^= x << 5u;
+    x ^= x >> 17u;
+    x ^= x << 5u;
     return x;
 }
 
@@ -127,7 +127,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
     );
     let stepi = vec3i(step);
     var current_voxel = vec3i(floor(origin / VOXEL_SIZE));
-    let next_bound = vec3f(current_voxel + vec3i((step + vec3f(1.0)) * 0.5)) * VOXEL_SIZE;
+    let next_bound = vec3f(current_voxel + (stepi + vec3i(1)) / 2) * VOXEL_SIZE;
 
     var t_max = (next_bound - origin) / direction;
     let t_delta = VOXEL_SIZE / direction * step;
@@ -153,7 +153,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
         record.id = textureLoad(voxel_data, current_voxel, 0).r;
         if (record.id != 0u) {
-            record.pos = ray_at(ray, record.t + 0.0001);
+            record.pos = ray_at(ray, record.t);
             record.has_hit = true;
             break;
         }
@@ -193,17 +193,7 @@ fn trace(ray_: Ray) -> vec3f {
     var result = vec3f(1.0);
     var ray = ray_;
 
-    let first_hrec = voxel_traverse(ray);
-    if (!first_hrec.has_hit) {
-        return background(ray);
-    }
-
-    let first_srec = scatter(ray, first_hrec);
-    result *= first_srec.weight;
-    ray.origin = first_hrec.pos;
-    ray.direction = normalize(first_srec.direction);
-
-    var i: i32 = 1;
+    var i: i32 = 0;
     for (; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
         if (!hrec.has_hit) {
@@ -221,19 +211,6 @@ fn trace(ray_: Ray) -> vec3f {
     } else {
         result *= background(ray);
     }
-/*
-    for (var i: i32 = 0; i < MAX_BOUNCE_COUNT; i += 1) {
-        let hrec = voxel_traverse(ray);
-        if (!hrec.has_hit) {
-            break;
-        }
-
-        let srec = scatter(ray, hrec);
-        result *= srec.weight;
-        ray.origin = hrec.pos;
-        ray.direction = normalize(srec.direction);
-    }
-*/
 
     return result;
 }
