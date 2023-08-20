@@ -1,5 +1,10 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use winit::{
+    event::*,
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
 
 mod app;
 mod math;
@@ -20,5 +25,28 @@ pub async fn run() {
         }
     }
 
-    App::new().await.run();
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_inner_size(winit::dpi::LogicalSize::new(480, 480))
+        .build(&event_loop)
+        .unwrap();
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::dpi::PhysicalSize;
+        window.set_inner_size(PhysicalSize::new(450, 400));
+
+        use winit::platform::web::WindowExtWebSys;
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.get_element_by_id("wasm-example")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
+            })
+            .expect("Failed to create canvas");
+    }
+
+    let app = App::new(window).await;
+    app.run(event_loop);
 }

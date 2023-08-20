@@ -292,10 +292,6 @@ where
         }
     }
 
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
-        false
-    }
-
     pub fn update(&mut self) {
         self.rng_seed = self.rng_provider.update();
         self.queue

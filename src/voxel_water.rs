@@ -1,14 +1,16 @@
 use crate::math::*;
 use crate::perlin::Perlin;
+use crate::renderer::{CameraDTO, MapDTO};
 use rand::Rng;
 
+#[repr(u8)]
 #[derive(Clone, Copy)]
 pub enum Cell {
     None = 0,
     Ground = 1,
 }
 
-impl From<Cell> for u32 {
+impl From<Cell> for u8 {
     fn from(cell: Cell) -> Self {
         cell as Self
     }
@@ -74,5 +76,17 @@ impl Map {
             }
         }
         map
+    }
+
+    pub fn to_dto<'a>(&'a self) -> MapDTO<'a> {
+        let cells = unsafe {
+            std::slice::from_raw_parts(self.cells.as_ptr() as *const u8, self.cells.len())
+        };
+        MapDTO {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            cells: cells,
+        }
     }
 }

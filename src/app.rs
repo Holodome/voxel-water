@@ -34,34 +34,10 @@ impl renderer::RngProvider for TimeRngProvider {
 pub struct App {
     map: Map,
     renderer: Renderer<TimeRngProvider>,
-    event_loop: EventLoop<()>,
 }
 
 impl App {
-    pub async fn new() -> Self {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_inner_size(winit::dpi::LogicalSize::new(480, 480))
-            .build(&event_loop)
-            .unwrap();
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            use winit::dpi::PhysicalSize;
-            window.set_inner_size(PhysicalSize::new(450, 400));
-
-            use winit::platform::web::WindowExtWebSys;
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| {
-                    let dst = doc.get_element_by_id("wasm-example")?;
-                    let canvas = web_sys::Element::from(window.canvas());
-                    dst.append_child(&canvas).ok()?;
-                    Some(())
-                })
-                .expect("Failed to create canvas");
-        }
-
+    pub async fn new(window: winit::window::Window) -> Self {
         let focus_dist = 1.0;
         let camera_at = Point3::new(10.0, 10.0, 10.0) * 1.5;
         let look_at = Point3::new(0.0, 0.0, 0.0);
@@ -81,19 +57,7 @@ impl App {
             vertical: camera_vertical,
         };
         let map = Map::random(10, 10, 10);
-        let voxel_data = map
-            .cells()
-            .iter()
-            .copied()
-            .map(Into::into)
-            .map(|it: u32| it as u8)
-            .collect::<Vec<u8>>();
-        let map_dto = MapDTO {
-            x: map.x(),
-            y: map.y(),
-            z: map.z(),
-            cells: &voxel_data,
-        };
+        let map_dto = map.to_dto();
         let dto = WorldDTO {
             camera: camera_dto,
             map: map_dto,
@@ -101,22 +65,22 @@ impl App {
         let rng_provider = TimeRngProvider::new();
         let renderer = Renderer::new(window, &dto, rng_provider).await;
 
-        Self {
-            map,
-            renderer,
-            event_loop,
-        }
+        Self { map, renderer }
     }
 
-    pub fn run(mut self) {
-        self.event_loop.run(move |event, _, control_flow| {
+    fn input(&mut self, event: &WindowEvent) -> bool {
+        false
+    }
+
+    pub fn run(mut self, event_loop: EventLoop<()>) {
+        event_loop.run(move |event, _, control_flow| {
             control_flow.set_poll();
             match event {
                 Event::WindowEvent {
                     ref event,
                     window_id,
                 } if window_id == self.renderer.window().id() => {
-                    if !self.renderer.input(event) {
+                    if !self.input(event) {
                         match event {
                             WindowEvent::Resized(phys_size) => {
                                 self.renderer.resize(*phys_size);
