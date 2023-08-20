@@ -292,13 +292,11 @@ where
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         self.rng_seed = self.rng_provider.update();
         self.queue
             .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&self.rng_seed));
-    }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
         let mut encoder = self

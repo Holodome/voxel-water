@@ -65,8 +65,26 @@ impl App {
         }
     }
 
-    fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+    fn input(&mut self, event: &WindowEvent, control_flow: &mut ControlFlow) {
+        match event {
+            WindowEvent::Resized(phys_size) => {
+                self.renderer.resize(*phys_size);
+            }
+            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                self.renderer.resize(**new_inner_size);
+            }
+            WindowEvent::CloseRequested
+            | WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
+                ..
+            } => *control_flow = ControlFlow::Exit,
+            _ => {}
+        }
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) {
@@ -77,30 +95,9 @@ impl App {
                     ref event,
                     window_id,
                 } if window_id == self.renderer.window().id() => {
-                    if !self.input(event) {
-                        match event {
-                            WindowEvent::Resized(phys_size) => {
-                                self.renderer.resize(*phys_size);
-                            }
-                            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                                self.renderer.resize(**new_inner_size);
-                            }
-                            WindowEvent::CloseRequested
-                            | WindowEvent::KeyboardInput {
-                                input:
-                                    KeyboardInput {
-                                        state: ElementState::Pressed,
-                                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                                        ..
-                                    },
-                                ..
-                            } => *control_flow = ControlFlow::Exit,
-                            _ => {}
-                        }
-                    }
+                    self.input(event, control_flow);
                 }
                 Event::RedrawRequested(window_id) if window_id == self.renderer.window().id() => {
-                    self.renderer.update();
                     match self.renderer.render() {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),

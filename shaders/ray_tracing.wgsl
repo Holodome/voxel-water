@@ -1,40 +1,13 @@
-const VOXEL_SIZE: f32 = 1.0;
-const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 4;
-
 struct VertexInput {
-    @location(0) uv: vec2f
+    @location(0) uv: vec2f,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
-    @location(0) uv: vec2f
+    @location(0) uv: vec2f,
+    @location(1) ray_direction: vec3f,
+    @location(2) ray_origin: vec3f
 };
-
-@vertex 
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    let pos = (in.uv * 2.0) - vec2f(1.0);
-    out.clip_position = vec4f(pos, 0.0, 1.0);
-    out.uv = in.uv;
-    return out;
-}
-
-struct WorldUniform {
-    camera_at: vec3f,
-    camera_lower_left: vec3f,
-    camera_horizontal: vec3f,
-    camera_vertical: vec3f,
-};
-
-@group(0) @binding(0)
-var<uniform> world: WorldUniform;
-
-@group(0) @binding(1)
-var voxel_data: texture_3d<u32>;
-
-@group(0) @binding(2) 
-var<uniform> random_seed: u32;
 
 struct Material {
     color: vec3f,
@@ -57,6 +30,35 @@ struct ScatterRecord {
     weight: vec3f,
     direction: vec3f
 };
+
+const VOXEL_SIZE: f32 = 1.0;
+const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
+const MAX_BOUNCE_COUNT: i32 = 4;
+
+@group(0) @binding(1)
+var voxel_data: texture_3d<u32>;
+
+@group(0) @binding(2) 
+var<uniform> random_seed: u32;
+
+@group(0) @binding(3) 
+var<uniform> inverse_projection_matrix: mat4x4f;
+
+@group(0) @binding(4)
+var<uniform> camera_matrix: mat4x4f;
+
+@vertex 
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    let pos = (in.uv * 2.0) - vec2f(1.0);
+    out.clip_position = vec4f(pos, 0.0, 1.0);
+    out.uv = in.uv;
+    let t1 = inverse_projection_matrix * vec4f(pos, -1.0, 1.0);
+    let t2 = camera_matrix * vec4f(t1.xyz, 0.0);
+    out.ray_direction = t2.xyz;
+    out.ray_origin = vec3f(camera_matrix[3][0], camera_matrix[3][1], camera_matrix[3][2]);
+    return out;
+}
 
 var<private> rng_state: u32;
 
@@ -223,10 +225,10 @@ fn ray_color(ray: Ray) -> vec3f {
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     rng_state = xorshift32(bitcast<u32>(in.uv.x * 123456789.0 + in.uv.y) ^ random_seed);
 
-    var ray: Ray;
-    ray.origin = world.camera_at;
-    ray.direction = normalize(world.camera_lower_left + in.uv.x * world.camera_horizontal 
-        + in.uv.y * world.camera_vertical - world.camera_at);
+    let ray = Ray(
+        in.ray_origin,
+        in.ray_direction
+    );
 
     return vec4f(ray_color(ray), 1.0);
 }
