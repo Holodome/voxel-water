@@ -45,7 +45,10 @@ var<uniform> random_seed: u32;
 var<uniform> inverse_projection_matrix: mat4x4f;
 
 @group(0) @binding(3)
-var<uniform> camera_matrix: mat4x4f;
+var<uniform> projection_matrix: mat4x4f;
+
+@group(0) @binding(4)
+var<uniform> view_matrix: mat4x4f;
 
 @vertex 
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -54,9 +57,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip_position = vec4f(pos, 0.0, 1.0);
     out.uv = in.uv;
     let t1 = inverse_projection_matrix * vec4f(pos, -1.0, 1.0);
-    let t2 = camera_matrix * vec4f(t1.xyz, 0.0);
+    let t2 = view_matrix * vec4f(t1.xyz, 0.0);
     out.ray_direction = t2.xyz;
-    out.ray_origin = vec3f(camera_matrix[3][0], camera_matrix[3][1], camera_matrix[3][2]);
+    out.ray_origin = vec3f(view_matrix[3][0], view_matrix[3][1], view_matrix[3][2]);
     return out;
 }
 

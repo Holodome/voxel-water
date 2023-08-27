@@ -5,7 +5,8 @@ use winit::{event::*, window::Window};
 
 #[derive(Clone, Debug)]
 pub struct CameraDTO {
-    pub camera_matrix: Matrix4,
+    pub view_matrix: Matrix4,
+    pub projection_matrix: Matrix4,
     pub inverse_projection_matrix: Matrix4,
 }
 
@@ -23,11 +24,7 @@ pub struct WorldDTO<'a> {
     pub map: MapDTO<'a>,
 }
 
-pub trait RngProvider {
-    fn update(&mut self) -> u32;
-}
-
-pub struct Renderer<Rng> {
+pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -37,19 +34,15 @@ pub struct Renderer<Rng> {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 
-    camera_matrix: wgpu::Buffer,
     inverse_projection_matrix: wgpu::Buffer,
+    projection_matrix: wgpu::Buffer,
+    view_matrix: wgpu::Buffer,
     rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
-
-    rng_provider: Rng,
 }
 
-impl<Rng> Renderer<Rng>
-where
-    Rng: RngProvider,
-{
-    pub async fn new<'a>(window: Window, dto: &WorldDTO<'a>, mut rng_provider: Rng) -> Self {
+impl Renderer {
+    pub async fn new<'a>(window: Window, dto: &WorldDTO<'a>) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -106,7 +99,7 @@ where
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
 
-        let rng_seed = rng_provider.update();
+        let rng_seed = 0;
         let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rng buffer"),
             contents: bytemuck::bytes_of(&rng_seed),
@@ -118,9 +111,14 @@ where
                 contents: bytemuck::bytes_of(&dto.camera.inverse_projection_matrix),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
-        let camera_matrix = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("camera matrix"),
-            contents: bytemuck::bytes_of(&dto.camera.inverse_projection_matrix),
+        let projection_matrix = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("projection matrix"),
+            contents: bytemuck::bytes_of(&dto.camera.projection_matrix),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let view_matrix = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("view matrix"),
+            contents: bytemuck::bytes_of(&dto.camera.view_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let voxel_texture_size = wgpu::Extent3d {
@@ -191,7 +189,17 @@ where
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: wgpu::ShaderStages::VERTEX,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -219,7 +227,11 @@ where
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: camera_matrix.as_entire_binding(),
+                    resource: projection_matrix.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: view_matrix.as_entire_binding(),
                 },
             ],
         });
@@ -280,11 +292,11 @@ where
             size,
             render_pipeline,
             vertex_buffer,
-            camera_matrix,
             inverse_projection_matrix,
+            projection_matrix,
+            view_matrix,
             rng_buffer,
             ray_tracing_bind_group,
-            rng_provider,
         }
     }
 
@@ -305,10 +317,6 @@ where
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let rng_seed = self.rng_provider.update();
-        self.queue
-            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&rng_seed));
-
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
         let mut encoder = self
@@ -345,6 +353,28 @@ where
         output.present();
 
         Ok(())
+    }
+
+    pub fn update_random_seed(&mut self, seed: u32) {
+        self.queue
+            .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&seed));
+    }
+    pub fn update_camera(&mut self, camera: &CameraDTO) {
+        self.queue.write_buffer(
+            &self.view_matrix,
+            0,
+            bytemuck::bytes_of(&camera.view_matrix),
+        );
+        self.queue.write_buffer(
+            &self.projection_matrix,
+            0,
+            bytemuck::bytes_of(&camera.projection_matrix),
+        );
+        self.queue.write_buffer(
+            &self.inverse_projection_matrix,
+            0,
+            bytemuck::bytes_of(&camera.inverse_projection_matrix),
+        );
     }
 }
 

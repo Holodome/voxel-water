@@ -9,15 +9,13 @@ pub struct Camera {
     vfov: f32,
     znear: f32,
     zfar: f32,
+    projection_matrix: Matrix4,
+    inverse_projection_matrix: Matrix4,
 
     pitch: f32,
     yaw: f32,
-    position: Point3,
-
-    world_matrix: Matrix4,
+    position: Vector3,
     view_matrix: Matrix4,
-    projection_matrix: Matrix4,
-    inverse_projection_matrix: Matrix4,
 }
 
 impl Camera {
@@ -25,6 +23,7 @@ impl Camera {
         let projection_matrix =
             *nalgebra::Perspective3::new(aspect_ratio, vfov, znear, zfar).as_matrix();
         let inverse_projection_matrix = projection_matrix.try_inverse().unwrap();
+        let view_matrix = Matrix4::identity();
         Self {
             aspect_ratio,
             vfov,
@@ -32,19 +31,34 @@ impl Camera {
             zfar,
             pitch: 0.0,
             yaw: 0.0,
-            position: Point3::new(0.0, 0.0, 0.0),
+            position: Vector3::new(0.0, 0.0, 0.0),
+            view_matrix,
             projection_matrix,
             inverse_projection_matrix,
         }
-        //
     }
 
-    pub fn update(&mut self, yaw_d: f32, pitch_d: f32, dp: Vector2) {
+    pub fn rotate(&mut self, yaw_d: f32, pitch_d: f32) {
         self.pitch += pitch_d;
         self.yaw += yaw_d;
-        let rotation_quat = Quat::from_axis_angle(&Vector3::x_axis(), self.pitch)
-            * Quat::from_axis_angle(axis, angle);
-        //
+        self.update_view_matrix();
+    }
+    pub fn translate(&mut self, translation: Vector3) {
+        self.position += translation;
+        self.update_view_matrix();
+    }
+
+    fn update_view_matrix(&mut self) {
+        let rotation = Matrix4::from_euler_angles(0.0, self.pitch, self.yaw);
+        self.view_matrix = Matrix4::new_translation(&self.position) * rotation;
+    }
+
+    pub fn as_dto(&self) -> CameraDTO {
+        CameraDTO {
+            view_matrix: self.view_matrix,
+            projection_matrix: self.projection_matrix,
+            inverse_projection_matrix: self.inverse_projection_matrix,
+        }
     }
 }
 
@@ -123,7 +137,7 @@ impl Map {
         map
     }
 
-    pub fn to_dto<'a>(&'a self) -> MapDTO<'a> {
+    pub fn as_dto<'a>(&'a self) -> MapDTO<'a> {
         let cells = unsafe {
             std::slice::from_raw_parts(self.cells.as_ptr() as *const u8, self.cells.len())
         };
@@ -131,7 +145,7 @@ impl Map {
             x: self.x,
             y: self.y,
             z: self.z,
-            cells: cells,
+            cells,
         }
     }
 }

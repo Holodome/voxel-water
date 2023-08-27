@@ -1,40 +1,19 @@
-use crate::renderer::{CameraDTO, MapDTO, Renderer, WorldDTO};
-use crate::voxel_water::{Camera, CameraParams, Map};
+use crate::renderer::{Renderer, WorldDTO};
+use crate::voxel_water::{Camera, Map};
 use crate::{math::*, renderer};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
 };
 
-#[derive(Debug)]
-struct TimeRngProvider {
-    last_time: std::time::SystemTime,
-}
-
-impl TimeRngProvider {
-    fn new() -> Self {
-        Self {
-            last_time: std::time::SystemTime::now(),
-        }
-    }
-}
-
-impl renderer::RngProvider for TimeRngProvider {
-    fn update(&mut self) -> u32 {
-        let new_time = std::time::SystemTime::now();
-        self.last_time = new_time;
-        self.last_time
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros() as u32
-    }
-}
+use crate::input::Input;
 
 pub struct App {
+    input: Input,
     camera: Camera,
     map: Map,
-    renderer: Renderer<TimeRngProvider>,
+    renderer: Renderer,
+    last_time: std::time::SystemTime,
 }
 
 impl App {
@@ -42,26 +21,23 @@ impl App {
         let window_size = window.inner_size();
         let aspect_ratio = (window_size.width as f32) / (window_size.height as f32);
 
-        let camera = Camera::new(CameraParams {
-            look_from: Point3::new(10.0, 10.0, 10.0) * 1.5,
-            look_at: Point3::new(0.0, 0.0, 0.0),
-            up: Vector3::new(0.0, 1.0, 0.0),
-            aspect_ratio,
-            vfov: 60.0_f32.to_radians(),
-            focus_dist: 1.0,
-        });
+        let mut camera = Camera::new(aspect_ratio, 60.0_f32.to_radians(), 0.1, 1000.0);
+        camera.translate(Vector3::new(10.0, 10.0, 10.0) * 1.5);
+
         let map = Map::random(10, 10, 10);
         let dto = WorldDTO {
-            camera: camera.to_dto(),
-            map: map.to_dto(),
+            camera: camera.as_dto(),
+            map: map.as_dto(),
         };
-        let rng_provider = TimeRngProvider::new();
-        let renderer = Renderer::new(window, &dto, rng_provider).await;
+        let renderer = Renderer::new(window, &dto).await;
+        let input = Input::default();
 
         Self {
+            input,
             camera,
             map,
             renderer,
+            last_time: std::time::SystemTime::now(),
         }
     }
 
@@ -73,17 +49,62 @@ impl App {
             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 self.renderer.resize(**new_inner_size);
             }
-            WindowEvent::CloseRequested
-            | WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    },
-                ..
-            } => *control_flow = ControlFlow::Exit,
+            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+            WindowEvent::KeyboardInput { input: key_ev, .. } => {
+                self.input.handle_key_event(*key_ev);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.input.handle_mouse_button(*state, *button);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.input.handle_mouse_move(*position);
+            }
             _ => {}
+        }
+    }
+
+    pub fn render(&mut self, control_flow: &mut ControlFlow) {
+        let new_time = std::time::SystemTime::now();
+        let time_delta = new_time.duration_since(self.last_time).unwrap_or_default();
+        self.last_time = new_time;
+        let rng_seed = self
+            .last_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_micros() as u32;
+        self.renderer.update_random_seed(rng_seed);
+
+        let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
+        let mut dp = Vector3::zeros();
+        if self.input.is_key_pressed(VirtualKeyCode::W) {
+            dp.y = 1.0;
+        }
+        if self.input.is_key_pressed(VirtualKeyCode::S) {
+            dp.y = -1.0;
+        }
+        if self.input.is_key_pressed(VirtualKeyCode::A) {
+            dp.x = -1.0;
+        }
+        if self.input.is_key_pressed(VirtualKeyCode::D) {
+            dp.x = 1.0;
+        }
+        if self.input.is_key_pressed(VirtualKeyCode::Space) {
+            dp.z = 1.0;
+        }
+        if self.input.is_key_pressed(VirtualKeyCode::C) {
+            dp.z = -1.0;
+        }
+        if dp.dot(&dp) > 0.001 {
+            let dp = dp.scale(time_delta_s * 1.0);
+            self.camera.translate(dp);
+            self.renderer.update_camera(&self.camera.as_dto());
+        }
+
+        match self.renderer.render() {
+            Ok(_) => {}
+            Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
+            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+            Err(e) => eprintln!("{:?}", e),
         }
     }
 
@@ -98,12 +119,7 @@ impl App {
                     self.input(event, control_flow);
                 }
                 Event::RedrawRequested(window_id) if window_id == self.renderer.window().id() => {
-                    match self.renderer.render() {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
-                        Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                        Err(e) => eprintln!("{:?}", e),
-                    }
+                    self.render(control_flow);
                 }
                 Event::MainEventsCleared => self.renderer.window().request_redraw(),
                 _ => {}
