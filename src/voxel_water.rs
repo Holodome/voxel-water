@@ -49,7 +49,7 @@ impl Camera {
     }
 
     fn update_view_matrix(&mut self) {
-        let rotation = Matrix4::from_euler_angles(0.0, self.pitch, self.yaw);
+        let rotation = Matrix4::from_euler_angles(self.yaw, self.pitch, 0.0);
         self.view_matrix = Matrix4::new_translation(&self.position) * rotation;
     }
 

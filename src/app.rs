@@ -76,27 +76,39 @@ impl App {
 
         let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
         let mut dp = Vector3::zeros();
-        if self.input.is_key_pressed(VirtualKeyCode::W) {
-            dp.y = 1.0;
-        }
-        if self.input.is_key_pressed(VirtualKeyCode::S) {
-            dp.y = -1.0;
-        }
-        if self.input.is_key_pressed(VirtualKeyCode::A) {
-            dp.x = -1.0;
-        }
-        if self.input.is_key_pressed(VirtualKeyCode::D) {
-            dp.x = 1.0;
-        }
-        if self.input.is_key_pressed(VirtualKeyCode::Space) {
-            dp.z = 1.0;
-        }
-        if self.input.is_key_pressed(VirtualKeyCode::C) {
+        if self.input.is_key_down(VirtualKeyCode::W) {
             dp.z = -1.0;
         }
+        if self.input.is_key_down(VirtualKeyCode::S) {
+            dp.z = 1.0;
+        }
+        if self.input.is_key_down(VirtualKeyCode::A) {
+            dp.x = -1.0;
+        }
+        if self.input.is_key_down(VirtualKeyCode::D) {
+            dp.x = 1.0;
+        }
+        if self.input.is_key_down(VirtualKeyCode::Space) {
+            dp.y = 1.0;
+        }
+        if self.input.is_key_down(VirtualKeyCode::C) {
+            dp.y = -1.0;
+        }
+        let mut camera_was_changed = false;
         if dp.dot(&dp) > 0.001 {
-            let dp = dp.scale(time_delta_s * 1.0);
+            let dp = dp.scale(time_delta_s * 2.0);
             self.camera.translate(dp);
+            camera_was_changed = true;
+        }
+        if self.input.is_mouse_down(MouseButton::Left) {
+            let delta = self.input.mouse_delta();
+            let pitch_d = delta.x as f32 / 500.0;
+            let yaw_d = delta.y as f32 / 500.0;
+            self.camera.rotate(-yaw_d, -pitch_d);
+            camera_was_changed = true;
+        }
+
+        if camera_was_changed {
             self.renderer.update_camera(&self.camera.as_dto());
         }
 
@@ -106,6 +118,7 @@ impl App {
             Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
             Err(e) => eprintln!("{:?}", e),
         }
+        self.input.next_frame();
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) {
