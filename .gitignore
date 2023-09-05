@@ -25,3 +25,4 @@ cmake-build-release
 *.toc
 *.d
 *.bib
+!docs/biblio.bib
