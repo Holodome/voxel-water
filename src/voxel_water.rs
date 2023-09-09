@@ -44,7 +44,9 @@ impl Camera {
         self.update_view_matrix();
     }
     pub fn translate(&mut self, translation: Vector3) {
-        self.position += translation;
+        let rotation = Quat::from_euler_angles(self.yaw, self.pitch, 0.0);
+        let actual_translation = rotation.transform_vector(&translation);
+        self.position += actual_translation;
         self.update_view_matrix();
     }
 
