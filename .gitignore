@@ -26,3 +26,4 @@ cmake-build-release
 *.d
 *.bib
 !docs/biblio.bib
+docs/svg-inkscape
