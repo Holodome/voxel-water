@@ -1,13 +1,22 @@
 \documentclass{bmstu}
 \usepackage[]{svg}
-% Работа с изображениями и таблицами; переопределение названий по ГОСТу
-\usepackage{caption}
-\captionsetup[figure]{name={Рисунок},labelsep=endash}
-\captionsetup[table]{singlelinecheck=false, labelsep=endash}
+
+\newcounter{myfigure}
+\pretocmd{\figure}{\stepcounter{myfigure}}{}{}
+\renewcommand{\thefigure}{\arabic{myfigure}}
+\newcounter{mytable}
+\pretocmd{\table}{\stepcounter{mytable}}{}{}
+\renewcommand{\thetable}{\arabic{mytable}}
+\newcounter{myequation}
+\pretocmd{\equation}{\stepcounter{myequation}}{}{}
+\renewcommand{\theequation}{\arabic{equation}}
 
 \bibliography{biblio}
 
 \begin{document}
+\newcounter{mylstlisting}
+\pretocmd{\lstlisting}{\stepcounter{mylstlisting}}{}{}
+\renewcommand{\thelstlisting}{\arabic{lstlisting}}
 
 \makecourseworktitle
     {Информатика, искусственный интеллект и системы управления}
