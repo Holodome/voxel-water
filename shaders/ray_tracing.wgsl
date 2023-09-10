@@ -211,9 +211,7 @@ fn trace(ray_: Ray) -> vec3f {
         ray.direction = normalize(srec.direction);
     }
 
-    if (i == MAX_BOUNCE_COUNT) {
-        result = vec3f(0.0);
-    } else {
+    if (i != MAX_BOUNCE_COUNT) {
         result *= background(ray);
     }
 
