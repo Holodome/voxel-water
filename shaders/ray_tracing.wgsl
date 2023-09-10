@@ -209,6 +209,14 @@ fn trace(ray_: Ray) -> vec3f {
         result *= srec.weight;
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
+
+        if i > 3 {
+            let p = max(max(result.x, result.y), result.z);
+            if random_f32() > min(p, 0.95) {
+                break;
+            }
+            result *= 1.0 / p;
+        }
     }
 
     if (i != MAX_BOUNCE_COUNT) {
