@@ -10,21 +10,20 @@
 \newcounter{myequation}
 \pretocmd{\equation}{\stepcounter{myequation}}{}{}
 \renewcommand{\theequation}{\arabic{equation}}
+\renewcommand\labelitemi{---}
 
 \bibliography{biblio}
 
 \begin{document}
-\newcounter{mylstlisting}
-\pretocmd{\lstlisting}{\stepcounter{mylstlisting}}{}{}
 \renewcommand{\thelstlisting}{\arabic{lstlisting}}
 
 \makecourseworktitle
     {Информатика, искусственный интеллект и системы управления}
     {Программное обеспечение ЭВМ и информационные технологии}
     {Визуализация воды с использованием вокселей}
-    {}
-    {}
-    {}
+    {Виноградов И. А./ИУ7-53Б} 
+    {Куров А. В.} 
+    {} 
 
 \maketableofcontents
 
