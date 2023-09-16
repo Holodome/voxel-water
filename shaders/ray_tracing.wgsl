@@ -38,8 +38,14 @@ const MAX_BOUNCE_COUNT: i32 = 4;
 @group(0) @binding(0)
 var voxel_data: texture_3d<u32>;
 
+struct RandomSeed {
+    value: u32,
+    p0: u32, p1: u32, p2: u32
+};
+
+// array is just to keep js happy, we actually use only 4 bytes
 @group(0) @binding(1) 
-var<uniform> random_seed: u32;
+var<uniform> random_seed: RandomSeed;
 
 @group(0) @binding(2) 
 var<uniform> inverse_projection_matrix: mat4x4f;
@@ -232,7 +238,7 @@ fn ray_color(ray: Ray) -> vec3f {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    rng_state = xorshift32(bitcast<u32>(in.uv.x * 123456789.0 + in.uv.y) ^ random_seed);
+    rng_state = xorshift32(bitcast<u32>(in.uv.x * 123456789.0 + in.uv.y) ^ random_seed.value);
 
     let ray = Ray(
         in.ray_origin,

@@ -99,7 +99,7 @@ impl Renderer {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
         });
 
-        let rng_seed = 0;
+        let rng_seed = [0u32; 4];
         let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rng buffer"),
             contents: bytemuck::bytes_of(&rng_seed),

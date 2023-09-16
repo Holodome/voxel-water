@@ -13,7 +13,7 @@ pub struct App {
     camera: Camera,
     map: Map,
     renderer: Renderer,
-    last_time: std::time::SystemTime,
+    last_time: instant::Instant,
 }
 
 impl App {
@@ -37,7 +37,7 @@ impl App {
             camera,
             map,
             renderer,
-            last_time: std::time::SystemTime::now(),
+            last_time: instant::Instant::now(),
         }
     }
 
@@ -64,15 +64,12 @@ impl App {
     }
 
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
-        let new_time = std::time::SystemTime::now();
-        let time_delta = new_time.duration_since(self.last_time).unwrap_or_default();
+        let new_time = instant::Instant::now();
+        let time_delta = new_time.duration_since(self.last_time);
         self.last_time = new_time;
-        let rng_seed = self
-            .last_time
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros() as u32;
-        self.renderer.update_random_seed(rng_seed);
+        let rng_seed = new_time.elapsed().as_millis();
+        println!("rng_seed, {:?}", rng_seed);
+        self.renderer.update_random_seed(rng_seed as u32);
 
         let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
         let mut dp = Vector3::zeros();

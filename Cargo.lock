@@ -448,8 +448,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1565,6 +1567,8 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "env_logger",
+ "getrandom",
+ "instant",
  "log",
  "nalgebra",
  "num",
