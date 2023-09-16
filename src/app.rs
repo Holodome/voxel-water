@@ -13,6 +13,7 @@ pub struct App {
     camera: Camera,
     map: Map,
     renderer: Renderer,
+    start_time: instant::Instant,
     last_time: instant::Instant,
 }
 
@@ -32,12 +33,14 @@ impl App {
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
+        let start_time = instant::Instant::now();
         Self {
             input,
             camera,
             map,
             renderer,
-            last_time: instant::Instant::now(),
+            start_time,
+            last_time: start_time,
         }
     }
 
@@ -67,8 +70,7 @@ impl App {
         let new_time = instant::Instant::now();
         let time_delta = new_time.duration_since(self.last_time);
         self.last_time = new_time;
-        let rng_seed = new_time.elapsed().as_millis();
-        println!("rng_seed, {:?}", rng_seed);
+        let rng_seed = new_time.duration_since(self.start_time).as_millis();
         self.renderer.update_random_seed(rng_seed as u32);
 
         let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
