@@ -27,6 +27,7 @@ pub async fn run() {
         .with_inner_size(winit::dpi::LogicalSize::new(480, 480))
         .build(&event_loop)
         .unwrap();
+
     #[cfg(target_arch = "wasm32")]
     {
         use winit::dpi::PhysicalSize;

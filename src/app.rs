@@ -1,6 +1,6 @@
-use crate::renderer::{Renderer, WorldDTO};
+use crate::math::*;
+use crate::renderer::{Imgui, Renderer, WorldDTO};
 use crate::voxel_water::{Camera, Map};
-use crate::{math::*, renderer};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -15,6 +15,7 @@ pub struct App {
     renderer: Renderer,
     start_time: instant::Instant,
     last_time: instant::Instant,
+    imgui: Imgui,
 }
 
 impl App {
@@ -30,10 +31,11 @@ impl App {
             camera: camera.as_dto(),
             map: map.as_dto(),
         };
-        let renderer = Renderer::new(window, &dto).await;
+        let mut renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
         let start_time = instant::Instant::now();
+        let imgui = Imgui::new(&mut renderer);
         Self {
             input,
             camera,
@@ -41,6 +43,7 @@ impl App {
             renderer,
             start_time,
             last_time: start_time,
+            imgui,
         }
     }
 
