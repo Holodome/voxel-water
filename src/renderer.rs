@@ -3,20 +3,26 @@ use rand::Rng;
 use wgpu::util::DeviceExt;
 use winit::{event::*, window::Window};
 
-pub struct Imgui {
+use imgui_winit_support::WinitPlatform;
+struct Imgui {
     pub imgui: imgui::Context,
     platform: imgui_winit_support::WinitPlatform,
     renderer: imgui_wgpu::Renderer,
 }
 
 impl Imgui {
-    pub fn new(renderer: &mut Renderer) -> Self {
-        let hidpi_factor = renderer.window.scale_factor();
+    fn new(
+        window: &winit::window::Window,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_format: wgpu::TextureFormat,
+    ) -> Self {
+        let hidpi_factor = window.scale_factor();
         let mut imgui = imgui::Context::create();
         let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
         platform.attach_window(
             imgui.io_mut(),
-            &renderer.window,
+            &window,
             imgui_winit_support::HiDpiMode::Default,
         );
         imgui.set_ini_filename(None);
@@ -36,10 +42,10 @@ impl Imgui {
 
         let renderer = imgui_wgpu::Renderer::new(
             &mut imgui,
-            &renderer.device,
-            &renderer.queue,
+            device,
+            queue,
             imgui_wgpu::RendererConfig {
-                texture_format: renderer.config.format,
+                texture_format,
                 ..Default::default()
             },
         );
@@ -48,6 +54,14 @@ impl Imgui {
             platform,
             renderer,
         }
+    }
+
+    fn update_time(&mut self, delta: std::time::Duration) {
+        self.imgui.io_mut().update_delta_time(delta);
+    }
+
+    fn get_frame(&mut self) -> &mut imgui::Ui {
+        self.imgui.frame()
     }
 }
 
@@ -87,6 +101,8 @@ pub struct Renderer {
     view_matrix: wgpu::Buffer,
     rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
+
+    imgui: Imgui,
 }
 
 impl Renderer {
@@ -331,6 +347,8 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let imgui = Imgui::new(&window, &device, &queue, config.format);
+
         Self {
             window,
             surface,
@@ -345,6 +363,7 @@ impl Renderer {
             view_matrix,
             rng_buffer,
             ray_tracing_bind_group,
+            imgui,
         }
     }
 
@@ -395,12 +414,26 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.ray_tracing_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+
+            self.imgui
+                .renderer
+                .render(
+                    self.imgui.imgui.render(),
+                    &self.queue,
+                    &self.device,
+                    &mut render_pass,
+                )
+                .expect("Rendering failed");
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())
+    }
+
+    pub fn update_time(&mut self, time: std::time::Duration) {
+        self.imgui.update_time(time);
     }
 
     pub fn update_random_seed(&mut self, seed: u32) {
@@ -423,6 +456,16 @@ impl Renderer {
             0,
             bytemuck::bytes_of(&camera.inverse_projection_matrix),
         );
+    }
+
+    pub fn get_frame(&mut self) -> &mut imgui::Ui {
+        self.imgui.get_frame()
+    }
+
+    pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
+        self.imgui
+            .platform
+            .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
     }
 }
 

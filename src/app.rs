@@ -1,5 +1,5 @@
 use crate::math::*;
-use crate::renderer::{Imgui, Renderer, WorldDTO};
+use crate::renderer::{Renderer, WorldDTO};
 use crate::voxel_water::{Camera, Map};
 use winit::{
     event::*,
@@ -15,7 +15,6 @@ pub struct App {
     renderer: Renderer,
     start_time: instant::Instant,
     last_time: instant::Instant,
-    imgui: Imgui,
 }
 
 impl App {
@@ -31,11 +30,10 @@ impl App {
             camera: camera.as_dto(),
             map: map.as_dto(),
         };
-        let mut renderer = Renderer::new(window, &dto).await;
+        let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
         let start_time = instant::Instant::now();
-        let imgui = Imgui::new(&mut renderer);
         Self {
             input,
             camera,
@@ -43,7 +41,6 @@ impl App {
             renderer,
             start_time,
             last_time: start_time,
-            imgui,
         }
     }
 
@@ -75,6 +72,7 @@ impl App {
         self.last_time = new_time;
         let rng_seed = new_time.duration_since(self.start_time).as_millis();
         self.renderer.update_random_seed(rng_seed as u32);
+        self.renderer.update_time(time_delta);
 
         let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
         let mut dp = Vector3::zeros();
@@ -114,6 +112,31 @@ impl App {
             self.renderer.update_camera(&self.camera.as_dto());
         }
 
+        {
+            let ui = self.renderer.get_frame();
+            let window = ui.window("Hello world");
+            window
+                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                .build(|| {
+                    ui.text("Hello world!");
+                    ui.text("This...is...imgui-rs on WGPU!");
+                    ui.separator();
+                    let mouse_pos = ui.io().mouse_pos;
+                    ui.text(format!(
+                        "Mouse Position: ({:.1},{:.1})",
+                        mouse_pos[0], mouse_pos[1]
+                    ));
+                });
+
+            let window = ui.window("Hello too");
+            window
+                .size([400.0, 200.0], imgui::Condition::FirstUseEver)
+                .position([400.0, 200.0], imgui::Condition::FirstUseEver)
+                .build(|| {
+                    ui.text(format!("Frametime: {time_delta:?}"));
+                });
+        };
+
         match self.renderer.render() {
             Ok(_) => {}
             Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
@@ -139,6 +162,7 @@ impl App {
                 Event::MainEventsCleared => self.renderer.window().request_redraw(),
                 _ => {}
             }
+            self.renderer.handle_input(&event);
         });
     }
 }
