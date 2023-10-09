@@ -1,3 +1,12 @@
+const pi = 3.14159265359;
+const two_pi = 6.28318530718;
+
+struct Onb {
+    u: vec3f, 
+    v: vec3f, 
+    w: vec3f
+};
+
 struct VertexInput {
     @location(0) uv: vec2f,
 };
@@ -64,12 +73,25 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.uv = in.uv;
     let t1 = inverse_projection_matrix * vec4f(pos, -1.0, 1.0);
     let t2 = view_matrix * vec4f(t1.xyz, 0.0);
-    out.ray_direction = t2.xyz;
+    out.ray_direction = normalize(t2.xyz);
     out.ray_origin = vec3f(view_matrix[3][0], view_matrix[3][1], view_matrix[3][2]);
     return out;
 }
 
 var<private> rng_state: u32;
+
+fn construct_onb(n: vec3f) -> Onb {
+    let w = normalize(n);
+    var a: vec3f;
+    if w.x > 0.9 {
+        a = vec3f(0.0, 1.0, 0.0);
+    } else {
+        a = vec3f(1.0, 0.0, 0.0);
+    }
+    let v = normalize(cross(w, a));
+    let u = normalize(cross(w, v));
+    return Onb(u, v, w);
+}
 
 fn xorshift32(state: u32) -> u32 {
     var x = state;
@@ -107,6 +129,20 @@ fn random_in_unit_sphere() -> vec3f {
         }
     }
     return p;
+}
+
+fn align_to_direction(n: vec3f, cos_theta: f32, phi: f32) -> vec3f {
+    let sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
+    let onb = construct_onb(n);
+    return (onb.u * cos(phi) + onb.v * sin(phi)) * sin_theta + 
+            n * cos_theta;
+}
+
+fn sample_cosine_weighted_hemisphere(n: vec3f) -> vec3f {
+    let r0 = random_f32();
+    let r1 = random_f32();
+    let cos_theta = sqrt(r0);
+    return align_to_direction(n, cos_theta, r1 * two_pi);
 }
 
 fn schlick(cosine: f32, refractive_index: f32) -> f32 {
@@ -182,10 +218,14 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
     var srec: ScatterRecord;
 
     var material: Material;
-    material.color = vec3f(0.0, 0.8, 0.0);
+    material.color = vec3f(0.0, 0.6, 0.0);
 
-    let target_vec = hrec.pos + hrec.normal + random_in_unit_sphere();
-    srec.direction = target_vec - hrec.pos;
+    //let target_vec = hrec.pos + hrec.normal + random_in_unit_sphere();
+    //srec.direction = target_vec - hrec.pos;
+    srec.direction = sample_cosine_weighted_hemisphere(hrec.normal);
+    //srec.weight = vec3f(random_f32(), random_f32(), random_f32());
+    //srec.weight = (srec.direction * 2.0) - vec3f(1.0, 1.0, 1.0);
+    //srec.weight = (hrec.normal * 2.0) - vec3f(1.0, 1.0, 1.0);
     srec.weight = material.color;
 
     return srec;
@@ -208,6 +248,9 @@ fn trace(ray_: Ray) -> vec3f {
     for (; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
         if (!hrec.has_hit) {
+            if (i == 0) {
+                result = background(ray);
+            }
             break;
         }
 
@@ -216,6 +259,7 @@ fn trace(ray_: Ray) -> vec3f {
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
 
+        /*
         if i > 3 {
             let p = max(max(result.x, result.y), result.z);
             if random_f32() > min(p, 0.95) {
@@ -223,10 +267,7 @@ fn trace(ray_: Ray) -> vec3f {
             }
             result *= 1.0 / p;
         }
-    }
-
-    if (i != MAX_BOUNCE_COUNT) {
-        result *= background(ray);
+        */
     }
 
     return result;
@@ -238,7 +279,9 @@ fn ray_color(ray: Ray) -> vec3f {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    rng_state = xorshift32(bitcast<u32>(in.uv.x * 123456789.0 + in.uv.y) ^ random_seed.value);
+    rng_state = xorshift32(bitcast<u32>(in.uv.x * 123.0 +
+                                        in.uv.y * 987.0) 
+                           * random_seed.value);
 
     let ray = Ray(
         in.ray_origin,

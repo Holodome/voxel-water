@@ -1,9 +1,7 @@
 use crate::math::*;
-use rand::Rng;
 use wgpu::util::DeviceExt;
-use winit::{event::*, window::Window};
+use winit::window::Window;
 
-use imgui_winit_support::WinitPlatform;
 struct Imgui {
     pub imgui: imgui::Context,
     platform: imgui_winit_support::WinitPlatform,
