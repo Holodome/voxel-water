@@ -12,7 +12,7 @@ pub struct Perlin {
 
 impl Perlin {
     fn permute(vec: &mut Vec<u32>, rng: &mut impl RandNalgebra) {
-        for i in (0..PERLIN_POINT_COUNT).rev() {
+        for i in (1..PERLIN_POINT_COUNT).rev() {
             let target: usize = rng.gen_range(0..i);
             vec.swap(i, target);
         }
@@ -60,7 +60,6 @@ impl Perlin {
                 }
             }
         }
-
         accum
     }
 

@@ -3,11 +3,12 @@ use wasm_bindgen::prelude::*;
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 mod app;
+mod camera;
 mod input;
+mod map;
 mod math;
 mod perlin;
 mod renderer;
-mod voxel_water;
 
 use app::App;
 

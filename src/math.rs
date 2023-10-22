@@ -76,3 +76,5 @@ pub trait RandNalgebra: rand::Rng {
         }
     }
 }
+
+impl<T> RandNalgebra for T where T: rand::Rng {}

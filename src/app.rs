@@ -1,6 +1,8 @@
+use crate::camera::Camera;
+use crate::map::Map;
 use crate::math::*;
+use crate::perlin::Perlin;
 use crate::renderer::{Renderer, WorldDTO};
-use crate::voxel_water::{Camera, Map};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -25,7 +27,10 @@ impl App {
         let mut camera = Camera::new(aspect_ratio, 60.0_f32.to_radians(), 0.1, 1000.0);
         camera.translate(Vector3::new(10.0, 10.0, 10.0) * 1.5);
 
-        let map = Map::random(10, 10, 10);
+        let mut rng = rand::thread_rng();
+        let mut perlin = Perlin::new(&mut rng);
+        let map = Map::with_perlin(40, 20, 40, &mut perlin);
+
         let dto = WorldDTO {
             camera: camera.as_dto(),
             map: map.as_dto(),
