@@ -65,6 +65,21 @@ var<uniform> projection_matrix: mat4x4f;
 @group(0) @binding(4)
 var<uniform> view_matrix: mat4x4f;
 
+var<private> materials: array<Material, 4> = array(
+    Material(
+        vec3f(0.0, 0.0, 0.0)
+    ),
+    Material(
+        vec3f(0.44313725490196076, 0.6666666666666666, 0.20392156862745098)
+    ),
+    Material(
+        vec3f(0.49019607843137253, 0.4392156862745098, 0.44313725490196076)
+    ),
+    Material(
+        vec3f(0.6274509803921569, 0.3568627450980392, 0.3254901960784314)
+    )
+);
+
 @vertex 
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
@@ -217,15 +232,10 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
     var srec: ScatterRecord;
 
-    var material: Material;
-    material.color = vec3f(0.0, 0.6, 0.0);
-
-    //let target_vec = hrec.pos + hrec.normal + random_in_unit_sphere();
-    //srec.direction = target_vec - hrec.pos;
+    let material = materials[hrec.id];
+    //var material: Material;
+    //material.color = vec3f(0.8, 0.1, 0.1);
     srec.direction = sample_cosine_weighted_hemisphere(hrec.normal);
-    //srec.weight = vec3f(random_f32(), random_f32(), random_f32());
-    //srec.weight = (srec.direction * 2.0) - vec3f(1.0, 1.0, 1.0);
-    //srec.weight = (hrec.normal * 2.0) - vec3f(1.0, 1.0, 1.0);
     srec.weight = material.color;
 
     return srec;

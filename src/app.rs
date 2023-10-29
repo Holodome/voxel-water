@@ -1,5 +1,6 @@
 use crate::camera::Camera;
-use crate::map::Map;
+use crate::map::{Cell, Map};
+use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::{Renderer, WorldDTO};
@@ -13,6 +14,7 @@ use crate::input::Input;
 pub struct App {
     input: Input,
     camera: Camera,
+    materials: Vec<Material>,
     map: Map,
     renderer: Renderer,
     start_time: instant::Instant,
@@ -30,10 +32,26 @@ impl App {
         let mut rng = rand::thread_rng();
         let mut perlin = Perlin::new(&mut rng);
         let map = Map::with_perlin(40, 20, 40, &mut perlin);
+        //let map = Map::random(10, 10, 10);
 
+        let materials = vec![
+            Material {
+                color: Cell::None.color(),
+            },
+            Material {
+                color: Cell::Grass.color(),
+            },
+            Material {
+                color: Cell::Stone.color(),
+            },
+            Material {
+                color: Cell::Ground.color(),
+            },
+        ];
         let dto = WorldDTO {
             camera: camera.as_dto(),
             map: map.as_dto(),
+            materials: &materials,
         };
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
@@ -42,6 +60,7 @@ impl App {
         Self {
             input,
             camera,
+            materials,
             map,
             renderer,
             start_time,

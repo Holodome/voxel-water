@@ -1,4 +1,6 @@
+use crate::materials::Material;
 use crate::math::*;
+use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -79,9 +81,13 @@ pub struct MapDTO<'a> {
 }
 
 #[derive(Clone, Debug)]
+pub struct MaterialDTO {}
+
+#[derive(Clone, Debug)]
 pub struct WorldDTO<'a> {
     pub camera: CameraDTO,
     pub map: MapDTO<'a>,
+    pub materials: &'a [Material],
 }
 
 pub struct Renderer {
@@ -150,7 +156,7 @@ impl Renderer {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };

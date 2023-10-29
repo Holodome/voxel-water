@@ -7,12 +7,25 @@ use rand::Rng;
 #[derive(Clone, Copy)]
 pub enum Cell {
     None = 0,
-    Ground = 1,
+    Grass = 1,
+    Stone = 2,
+    Ground = 3,
 }
 
 impl From<Cell> for u8 {
     fn from(cell: Cell) -> Self {
         cell as Self
+    }
+}
+
+impl Cell {
+    pub fn color(self) -> u32 {
+        match self {
+            Self::None => 0x0,
+            Self::Grass => 0x71aa34,
+            Self::Stone => 0x7d7071,
+            Self::Ground => 0xa05b53,
+        }
     }
 }
 
@@ -48,8 +61,10 @@ impl Map {
     pub fn random(x: usize, y: usize, z: usize) -> Self {
         let mut rng = rand::thread_rng();
         let cells = (0..x * y * z)
-            .map(|_| match rng.gen::<u32>() % 2 {
+            .map(|_| match rng.gen::<u32>() % 4 {
                 0 => Cell::None,
+                1 => Cell::Grass,
+                2 => Cell::Stone,
                 _ => Cell::Ground,
             })
             .collect();

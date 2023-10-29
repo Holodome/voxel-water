@@ -6,6 +6,7 @@ mod app;
 mod camera;
 mod input;
 mod map;
+mod materials;
 mod math;
 mod perlin;
 mod renderer;
@@ -25,7 +26,7 @@ pub async fn run() {
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_inner_size(winit::dpi::LogicalSize::new(480, 480))
+        .with_inner_size(winit::dpi::LogicalSize::new(960, 720))
         .build(&event_loop)
         .unwrap();
 

@@ -1,7 +1,5 @@
 use crate::math::*;
-use crate::perlin::Perlin;
-use crate::renderer::{CameraDTO, MapDTO};
-use rand::Rng;
+use crate::renderer::CameraDTO;
 
 #[derive(Debug, Clone)]
 pub struct Camera {
