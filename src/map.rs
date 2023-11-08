@@ -67,9 +67,9 @@ impl Map {
         let mut rng = rand::thread_rng();
         let cells = (0..x * y * z)
             .map(|_| match rng.gen::<u32>() % 4 {
-                0 => Cell::None,
-                1 => Cell::Grass,
-                2 => Cell::Stone,
+                //0 => Cell::None,
+                1 | 2 => Cell::Stone,
+                //2 => Cell::Stone,
                 _ => Cell::Ground,
             })
             .collect();

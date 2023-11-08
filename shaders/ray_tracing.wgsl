@@ -18,8 +18,15 @@ struct VertexOutput {
     @location(2) ray_origin: vec3f
 };
 
+const MAT_DIFFUSE: i32 = 0;
+const MAT_METAL: i32 = 1;
+const MAT_DIELECTRIC: i32 = 2;
+
 struct Material {
-    color: vec3f,
+    albedo: vec3f,
+    fuzz: f32,
+    refractive_index: f32,
+    kind: i32
 };
 
 struct Ray {
@@ -36,13 +43,13 @@ struct HitRecord {
 };
 
 struct ScatterRecord {
-    weight: vec3f,
+    attenuation: vec3f,
     direction: vec3f
 };
 
 const VOXEL_SIZE: f32 = 1.0;
 const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 2;
+const MAX_BOUNCE_COUNT: i32 = 4;
 
 @group(0) @binding(0)
 var voxel_data: texture_3d<u32>;
@@ -67,16 +74,31 @@ var<uniform> view_matrix: mat4x4f;
 
 var<private> materials: array<Material, 4> = array(
     Material(
-        vec3f(0.0, 0.0, 0.0)
+        vec3f(0.0, 0.0, 0.0),
+        0.0, 0.0,
+        MAT_DIFFUSE
     ),
     Material(
-        vec3f(0.44313725490196076, 0.6666666666666666, 0.20392156862745098)
+        vec3f(0.44313725490196076, 0.6666666666666666, 0.20392156862745098),
+        0.0, 0.0,
+        MAT_DIFFUSE
     ),
     Material(
-        vec3f(0.49019607843137253, 0.4392156862745098, 0.44313725490196076)
+        vec3f(0.6, 0.6, 0.9),
+        0.0, 0.4,
+        MAT_DIELECTRIC
     ),
+    /*
     Material(
-        vec3f(0.6274509803921569, 0.3568627450980392, 0.3254901960784314)
+        vec3f(0.49019607843137253, 0.4392156862745098, 0.44313725490196076),
+        0.0, 0.0,
+        MAT_DIFFUSE
+    ),
+    */
+    Material(
+        vec3f(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
+        0.5, 0.0, 
+        MAT_METAL
     )
 );
 
@@ -160,6 +182,13 @@ fn sample_cosine_weighted_hemisphere(n: vec3f) -> vec3f {
     return align_to_direction(n, cos_theta, r1 * two_pi);
 }
 
+fn sample_ggx_distribution(n: vec3f, alpha_sq: f32) -> vec3f {
+    let r0 = random_f32();
+    let r1 = random_f32();
+    let cos_theta = sqrt(saturate((1.0 - r0) / (r0 * (alpha_sq - 1.0) + 1.0)));
+    return align_to_direction(n, cos_theta, r1 * two_pi);
+}
+
 fn schlick(cosine: f32, refractive_index: f32) -> f32 {
     let r0_ = (1.0 - refractive_index) / (1.0 + refractive_index);
     let r0 = r0_ * r0_;
@@ -233,10 +262,36 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
     var srec: ScatterRecord;
 
     let material = materials[hrec.id];
-    //var material: Material;
-    //material.color = vec3f(0.8, 0.1, 0.1);
-    srec.direction = sample_cosine_weighted_hemisphere(hrec.normal);
-    srec.weight = material.color;
+    switch material.kind {
+        case 0 /* MAT_DIFFUSE */, default: {
+            srec.direction = sample_cosine_weighted_hemisphere(hrec.normal);
+            srec.attenuation = material.albedo;
+        }
+        case 1 /* MAT_METAL */: {
+            let alpha_sq = material.fuzz * material.fuzz;
+            let microfacet_n = sample_ggx_distribution(hrec.normal, alpha_sq);
+            srec.direction = microfacet_n;
+            srec.attenuation = material.albedo;
+        }
+        case 2 /* MAT_DIELECTRIC */: {
+            var refraction_ratio = material.refractive_index;
+            if dot(ray.direction, hrec.normal) <= 0.0 {
+                refraction_ratio = 1.0 / refraction_ratio;
+            }
+            let cos_theta = min(dot(-ray.direction, hrec.normal), 1.0);
+            let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+            if material.refractive_index * sin_theta > 1.0 || 
+               schlick(cos_theta, material.refractive_index) > random_f32() {
+                srec.direction = reflect(ray.direction, hrec.normal);
+            } else {
+                srec.direction = refract(ray.direction, hrec.normal, 
+                                         material.refractive_index);
+            }
+
+            srec.attenuation = material.albedo;
+        }
+    }
 
     return srec;
 }
@@ -260,7 +315,7 @@ fn trace(ray_: Ray) -> vec3f {
         }
 
         let srec = scatter(ray, hrec);
-        result *= srec.weight;
+        result *= srec.attenuation;
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
 

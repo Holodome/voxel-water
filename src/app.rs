@@ -32,7 +32,7 @@ impl App {
         let mut rng = rand::thread_rng();
         let mut perlin = Perlin::new(&mut rng);
         let map = Map::with_perlin(40, 20, 40, &mut perlin);
-        // let map = Map::random(10, 10, 10);
+        let map = Map::random(10, 10, 10);
         // let map = Map::cube(10, 10, 10);
 
         let materials = vec![
