@@ -58,6 +58,11 @@ impl Map {
         &mut self.cells[z * (self.x * self.y) + y * self.x + x]
     }
 
+    pub fn cube(x: usize, y: usize, z: usize) -> Self {
+        let cells = (0..x * y * z).map(|_| Cell::Grass).collect();
+        Self { x, y, z, cells }
+    }
+
     pub fn random(x: usize, y: usize, z: usize) -> Self {
         let mut rng = rand::thread_rng();
         let cells = (0..x * y * z)
@@ -81,8 +86,10 @@ impl Map {
                 let height = (perlin_value.sin() + 1.0) * 0.5 * (y as f32);
                 let height = height as usize;
                 for py in 0..height {
-                    let cell = if py < height {
+                    let cell = if py < height - 1 {
                         Cell::Ground
+                    } else if py == height - 1 {
+                        Cell::Grass
                     } else {
                         Cell::None
                     };

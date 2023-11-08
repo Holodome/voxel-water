@@ -42,7 +42,7 @@ struct ScatterRecord {
 
 const VOXEL_SIZE: f32 = 1.0;
 const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 4;
+const MAX_BOUNCE_COUNT: i32 = 2;
 
 @group(0) @binding(0)
 var voxel_data: texture_3d<u32>;
@@ -98,7 +98,7 @@ var<private> rng_state: u32;
 fn construct_onb(n: vec3f) -> Onb {
     let w = normalize(n);
     var a: vec3f;
-    if w.x > 0.9 {
+    if abs(w.x) > 0.9 {
         a = vec3f(0.0, 1.0, 0.0);
     } else {
         a = vec3f(1.0, 0.0, 0.0);
@@ -243,11 +243,6 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
 
 fn background(ray: Ray) -> vec3f {
     return vec3f(0.5);
-    /*
-    let unit_direction = normalize(ray.direction);
-    let t = 0.5 * (unit_direction.y + 1.0);
-    return (1.0 - t) * vec3f(1.0, 1.0, 1.0) + t * vec3f(0.5, 0.7, 1.0);
-    */
 }
 
 fn trace(ray_: Ray) -> vec3f {
