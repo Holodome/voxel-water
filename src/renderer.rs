@@ -105,8 +105,7 @@ pub struct Renderer {
     view_matrix: wgpu::Buffer,
     rng_buffer: wgpu::Buffer,
     ray_tracing_bind_group: wgpu::BindGroup,
-
-    imgui: Imgui,
+    // imgui: Imgui,
 }
 
 impl Renderer {
@@ -367,7 +366,7 @@ impl Renderer {
             view_matrix,
             rng_buffer,
             ray_tracing_bind_group,
-            imgui,
+            // imgui,
         }
     }
 
@@ -419,15 +418,15 @@ impl Renderer {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
 
-            self.imgui
-                .renderer
-                .render(
-                    self.imgui.imgui.render(),
-                    &self.queue,
-                    &self.device,
-                    &mut render_pass,
-                )
-                .expect("Rendering failed");
+            // self.imgui
+            //     .renderer
+            //     .render(
+            //         self.imgui.imgui.render(),
+            //         &self.queue,
+            //         &self.device,
+            //         &mut render_pass,
+            //     )
+            //     .expect("Rendering failed");
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -437,7 +436,7 @@ impl Renderer {
     }
 
     pub fn update_time(&mut self, time: std::time::Duration) {
-        self.imgui.update_time(time);
+        // self.imgui.update_time(time);
     }
 
     pub fn update_random_seed(&mut self, seed: u32) {
@@ -462,15 +461,15 @@ impl Renderer {
         );
     }
 
-    pub fn get_frame(&mut self) -> &mut imgui::Ui {
-        self.imgui.get_frame()
-    }
+    // pub fn get_frame(&mut self) -> &mut imgui::Ui {
+    //     self.imgui.get_frame()
+    // }
 
-    pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
-        self.imgui
-            .platform
-            .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
-    }
+    // pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
+    //     self.imgui
+    //         .platform
+    //         .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
+    // }
 }
 
 #[repr(C)]

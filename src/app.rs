@@ -136,30 +136,30 @@ impl App {
             self.renderer.update_camera(&self.camera.as_dto());
         }
 
-        {
-            let ui = self.renderer.get_frame();
-            let window = ui.window("Hello world");
-            window
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                .build(|| {
-                    ui.text("Hello world!");
-                    ui.text("This...is...imgui-rs on WGPU!");
-                    ui.separator();
-                    let mouse_pos = ui.io().mouse_pos;
-                    ui.text(format!(
-                        "Mouse Position: ({:.1},{:.1})",
-                        mouse_pos[0], mouse_pos[1]
-                    ));
-                });
+        // {
+        //     let ui = self.renderer.get_frame();
+        //     let window = ui.window("Hello world");
+        //     window
+        //         .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+        //         .build(|| {
+        //             ui.text("Hello world!");
+        //             ui.text("This...is...imgui-rs on WGPU!");
+        //             ui.separator();
+        //             let mouse_pos = ui.io().mouse_pos;
+        //             ui.text(format!(
+        //                 "Mouse Position: ({:.1},{:.1})",
+        //                 mouse_pos[0], mouse_pos[1]
+        //             ));
+        //         });
 
-            let window = ui.window("Hello too");
-            window
-                .size([400.0, 200.0], imgui::Condition::FirstUseEver)
-                .position([400.0, 200.0], imgui::Condition::FirstUseEver)
-                .build(|| {
-                    ui.text(format!("Frametime: {time_delta:?}"));
-                });
-        };
+        //     let window = ui.window("Hello too");
+        //     window
+        //         .size([400.0, 200.0], imgui::Condition::FirstUseEver)
+        //         .position([400.0, 200.0], imgui::Condition::FirstUseEver)
+        //         .build(|| {
+        //             ui.text(format!("Frametime: {time_delta:?}"));
+        //         });
+        // };
 
         match self.renderer.render() {
             Ok(_) => {}
@@ -186,7 +186,7 @@ impl App {
                 Event::MainEventsCleared => self.renderer.window().request_redraw(),
                 _ => {}
             }
-            self.renderer.handle_input(&event);
+            // self.renderer.handle_input(&event);
         });
     }
 }
