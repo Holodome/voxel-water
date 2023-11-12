@@ -322,6 +322,7 @@ fn background(ray: Ray) -> vec3f {
 
 fn trace(ray_: Ray) -> TraceResult {
     var result: TraceResult;
+    result.color = vec3f(1.0);
     var ray = ray_;
 
     var i: i32 = 0;
