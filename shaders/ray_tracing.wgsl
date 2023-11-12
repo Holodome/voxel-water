@@ -360,7 +360,7 @@ fn trace(ray_: Ray) -> TraceResult {
     return result;
 }
 
-fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
+fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
     var result: FragmentOutput;
     result.color = vec4f(fs.color, 1.0);
     result.normal = vec4f(fs.normal, 0.0);
@@ -369,7 +369,13 @@ fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
 
     let point = projection_matrix * prev_view_matrix * vec4f(fs.pos, 1.0);
     let p = point.xyz / point.w;
-    let prev_uv = vec2f((p.x / 2.0) + 0.5, (p.y / 2.0) + 0.5);
+    let prev_uv = normalize(vec2f((p.x / 2.0) + 0.5, (p.z / 2.0) + 0.5));
+    
+    //result.color = 0.5 * result.color + 0.5 * 
+
+    //let prev_sample = textureSample(prev_color_tex, prev_tex_sampler, vec2f(uv.x, 1.0 - uv.y));
+    //result.color = abs(prev_sample - result.color);
+    
     let prev_normal = textureSample(prev_normal_tex, prev_tex_sampler, prev_uv).rgb;
     let prev_offset_id = textureSample(prev_offset_tex, prev_tex_sampler, prev_uv).r;
     let prev_mat_id = textureSample(prev_mat_tex, prev_tex_sampler, prev_uv).r;
@@ -379,12 +385,16 @@ fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
     if (result.material_id != 0.0) {
         if (prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
             prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
-            result.material_id == prev_mat_id && 
-            distance(result.normal.xyz, prev_normal) < 0.1 && 
-            result.offset_id == prev_offset_id) {
-            let alpha = (1.0 / 9.0) * reproject;
+            //result.material_id == prev_mat_id && 
+            //distance(result.normal.xyz, prev_normal) < 0.1 && 
+            //result.offset_id == prev_offset_id &&
+            true
+        ) {
+            //let alpha = (1.0 / 9.0) * reproject;
+            let alpha = 1.0 / 9.0;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;
-            result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
+            result.color = vec4f(1.0,0.0,1.0,1.0);
+            //result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
         } else {
             // missed the cache
             result.cache_tail = 1.0;
@@ -393,6 +403,8 @@ fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
         // ray didn't hit anything
         result.cache_tail = 0.0;
     }
+    //result.color = vec4f(prev_color.r, result.color.y, result.color.z, 1.0);
+    //result.color = vec4f(prev_uv, 0.0, 1.0);
 
     return result;
 }
@@ -408,5 +420,5 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         in.ray_direction
     );
 
-    return temporal_reverse_reprojection(trace(ray));
+    return temporal_reverse_reprojection(trace(ray), in.uv);
 }

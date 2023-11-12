@@ -133,9 +133,9 @@ impl App {
             camera_was_changed = true;
         }
 
-        if camera_was_changed {
-            self.renderer.update_camera(&self.camera.as_dto());
-        }
+        // if camera_was_changed {
+        self.renderer.update_camera(&self.camera.as_dto());
+        // }
 
         // {
         //     let ui = self.renderer.get_frame();

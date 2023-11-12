@@ -250,7 +250,6 @@ pub struct Renderer {
     view_matrix: wgpu::Buffer,
 
     target_textures: [TargetTextures; 2],
-    prev_sampler: wgpu::Sampler,
 
     prev_view_matrix: wgpu::Buffer,
     reproject: wgpu::Buffer,
@@ -262,7 +261,8 @@ pub struct Renderer {
     present_pipeline: wgpu::RenderPipeline,
     present_sampl_bind_group: wgpu::BindGroup,
     present_tex_bind_groups: [wgpu::BindGroup; 2],
-    // imgui: Imgui,
+
+    last_view_matrix: Matrix4,
 }
 
 impl Renderer {
@@ -404,7 +404,7 @@ impl Renderer {
             contents: bytemuck::bytes_of(&dto.camera.view_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let reproject_value = 0.0f32;
+        let reproject_value = 1.0f32;
         let reproject = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("reproject"),
             contents: bytemuck::bytes_of(&reproject_value),
@@ -759,7 +759,6 @@ impl Renderer {
             view_matrix,
 
             target_textures,
-            prev_sampler,
             prev_view_matrix,
             reproject,
 
@@ -770,6 +769,8 @@ impl Renderer {
             present_pipeline,
             present_sampl_bind_group,
             present_tex_bind_groups,
+
+            last_view_matrix: dto.camera.view_matrix,
         }
     }
 
@@ -896,6 +897,11 @@ impl Renderer {
     }
     pub fn update_camera(&mut self, camera: &CameraDTO) {
         self.queue.write_buffer(
+            &self.prev_view_matrix,
+            0,
+            bytemuck::bytes_of(&self.last_view_matrix),
+        );
+        self.queue.write_buffer(
             &self.view_matrix,
             0,
             bytemuck::bytes_of(&camera.view_matrix),
@@ -910,6 +916,7 @@ impl Renderer {
             0,
             bytemuck::bytes_of(&camera.inverse_projection_matrix),
         );
+        self.last_view_matrix = camera.view_matrix;
     }
 
     // pub fn get_frame(&mut self) -> &mut imgui::Ui {
