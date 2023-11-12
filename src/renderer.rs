@@ -871,7 +871,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.present_pipeline);
             render_pass.set_bind_group(
                 0,
-                &self.present_tex_bind_groups[self.targets_ping_pong as usize],
+                &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
                 &[],
             );
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
@@ -916,7 +916,7 @@ impl Renderer {
             0,
             bytemuck::bytes_of(&camera.inverse_projection_matrix),
         );
-        self.last_view_matrix = camera.view_matrix;
+        self.last_view_matrix = camera.view_matrix.try_inverse().unwrap();
     }
 
     // pub fn get_frame(&mut self) -> &mut imgui::Ui {

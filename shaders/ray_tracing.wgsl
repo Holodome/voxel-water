@@ -60,7 +60,6 @@ struct HitRecord {
     offset_id: i32,
     t: f32,
     id: u32,
-    has_hit: bool,
 };
 
 struct ScatterRecord {
@@ -266,7 +265,6 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
         record.id = textureLoad(voxel_data, current_voxel, 0).r;
         if (record.id != 0u) {
             record.pos = ray_at(ray, record.t);
-            record.has_hit = true;
             break;
         }
 
@@ -329,7 +327,7 @@ fn trace(ray_: Ray) -> TraceResult {
     var i: i32 = 0;
     for (; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
-        if (!hrec.has_hit) {
+        if (hrec.id == 0u) {
             if (i == 0) {
                 result.color = background(ray);
             }
@@ -341,10 +339,12 @@ fn trace(ray_: Ray) -> TraceResult {
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
 
-        result.pos = hrec.pos;
-        result.id = hrec.id;
-        result.normal = hrec.normal;
-        result.offset_id = hrec.offset_id;
+        if (i == 0) {
+            result.pos = hrec.pos;
+            result.id = hrec.id;
+            result.normal = hrec.normal;
+            result.offset_id = hrec.offset_id;
+        }
 
         /*
         if i > 3 {
@@ -369,42 +369,31 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
 
     let point = projection_matrix * prev_view_matrix * vec4f(fs.pos, 1.0);
     let p = point.xyz / point.w;
-    let prev_uv = normalize(vec2f((p.x / 2.0) + 0.5, (p.z / 2.0) + 0.5));
-    
-    //result.color = 0.5 * result.color + 0.5 * 
-
-    //let prev_sample = textureSample(prev_color_tex, prev_tex_sampler, vec2f(uv.x, 1.0 - uv.y));
-    //result.color = abs(prev_sample - result.color);
+    let prev_uv1 = (p.xy + vec2f(1.0)) * 0.5;
+    let prev_uv = vec2f(prev_uv1.x, 1.0 - prev_uv1.y);
     
     let prev_normal = textureSample(prev_normal_tex, prev_tex_sampler, prev_uv).rgb;
     let prev_offset_id = textureSample(prev_offset_tex, prev_tex_sampler, prev_uv).r;
     let prev_mat_id = textureSample(prev_mat_tex, prev_tex_sampler, prev_uv).r;
     let prev_cache_tail = textureSample(prev_cache_tail_tex, prev_tex_sampler, prev_uv).r;
     let prev_color = textureSample(prev_color_tex, prev_tex_sampler, prev_uv).rgb;
-
+    
     if (result.material_id != 0.0) {
         if (prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
             prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
-            //result.material_id == prev_mat_id && 
-            //distance(result.normal.xyz, prev_normal) < 0.1 && 
-            //result.offset_id == prev_offset_id &&
+            result.material_id == prev_mat_id && 
+            distance(result.normal.xyz, prev_normal) < 0.1 && 
+            result.offset_id == prev_offset_id &&
             true
         ) {
-            //let alpha = (1.0 / 9.0) * reproject;
-            let alpha = 1.0 / 9.0;
+            let alpha = (1.0 / 9.0) * reproject;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;
-            result.color = vec4f(1.0,0.0,1.0,1.0);
-            //result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
+            result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
         } else {
             // missed the cache
             result.cache_tail = 1.0;
         }
-    } else {
-        // ray didn't hit anything
-        result.cache_tail = 0.0;
     }
-    //result.color = vec4f(prev_color.r, result.color.y, result.color.z, 1.0);
-    //result.color = vec4f(prev_uv, 0.0, 1.0);
 
     return result;
 }
