@@ -28,7 +28,7 @@ struct VertexOutput {
 
 struct FragmentOutput {
     @location(0) color: vec4f,
-    @location(1) normal: vec3f,
+    @location(1) normal: vec4f,
     @location(2) material_id: f32,
     @location(3) offset_id: f32,
     @location(4) cache_tail: f32
@@ -363,7 +363,7 @@ fn trace(ray_: Ray) -> TraceResult {
 fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
     var result: FragmentOutput;
     result.color = vec4f(fs.color, 1.0);
-    result.normal = fs.normal;
+    result.normal = vec4f(fs.normal, 0.0);
     result.material_id = f32(fs.id);
     result.offset_id = f32(fs.offset_id);
 
@@ -380,7 +380,7 @@ fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
         if (prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
             prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
             result.material_id == prev_mat_id && 
-            distance(result.normal, prev_normal) < 0.1 && 
+            distance(result.normal.xyz, prev_normal) < 0.1 && 
             result.offset_id == prev_offset_id) {
             let alpha = (1.0 / 9.0) * reproject;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;

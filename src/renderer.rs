@@ -112,7 +112,9 @@ impl TargetTextures {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("prev color texture"),
             view_formats: &[],
         });
@@ -123,7 +125,9 @@ impl TargetTextures {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("prev normal texture"),
             view_formats: &[],
         });
@@ -134,7 +138,9 @@ impl TargetTextures {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("prev mat texture"),
             view_formats: &[],
         });
@@ -145,7 +151,9 @@ impl TargetTextures {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("prev offset texture"),
             view_formats: &[],
         });
@@ -156,7 +164,9 @@ impl TargetTextures {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("prev cache tail texture"),
             view_formats: &[],
         });
@@ -206,6 +216,21 @@ impl TargetTextures {
             ],
         })
     }
+
+    fn present_bind_group(
+        &self,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("textures bind group"),
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&self.prev_color_texture_view),
+            }],
+        })
+    }
 }
 
 pub struct Renderer {
@@ -232,6 +257,11 @@ pub struct Renderer {
 
     ray_tracing_bind_group: wgpu::BindGroup,
     targets_bind_groups: [wgpu::BindGroup; 2],
+    targets_ping_pong: bool,
+
+    present_pipeline: wgpu::RenderPipeline,
+    present_sampl_bind_group: wgpu::BindGroup,
+    present_tex_bind_groups: [wgpu::BindGroup; 2],
     // imgui: Imgui,
 }
 
@@ -291,6 +321,11 @@ impl Renderer {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/ray_tracing.wgsl").into()),
+        });
+
+        let present_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("present shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/present.wgsl").into()),
         });
 
         let rng_seed = [0u32; 4];
@@ -556,6 +591,42 @@ impl Renderer {
             target_textures[0].bind_group(&device, &targets_bind_group_layout),
             target_textures[1].bind_group(&device, &targets_bind_group_layout),
         ];
+        let present_tex_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("present bind group"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
+        let present_tex_bind_groups = [
+            target_textures[0].present_bind_group(&device, &present_tex_bind_group_layout),
+            target_textures[1].present_bind_group(&device, &present_tex_bind_group_layout),
+        ];
+        let present_sampl_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("present bind group"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                    count: None,
+                }],
+            });
+        let present_sampl_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("present sampl bind group"),
+            layout: &present_sampl_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Sampler(&prev_sampler),
+            }],
+        });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -563,6 +634,49 @@ impl Renderer {
                 bind_group_layouts: &[&ray_tracing_bind_group_layout, &targets_bind_group_layout],
                 push_constant_ranges: &[],
             });
+        let present_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("present pipeline layout"),
+                bind_group_layouts: &[
+                    &present_tex_bind_group_layout,
+                    &present_sampl_bind_group_layout,
+                ],
+                push_constant_ranges: &[],
+            });
+        let present_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("present pipeline"),
+            layout: Some(&present_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &present_shader,
+                entry_point: "vs_main",
+                buffers: &[DisplayVertex::desc()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &present_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+        });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -589,11 +703,33 @@ impl Renderer {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &[
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::R32Float,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::R32Float,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::R32Float,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                ],
             }),
             multiview: None,
         });
@@ -604,7 +740,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let imgui = Imgui::new(&window, &device, &queue, config.format);
+        // let imgui = Imgui::new(&window, &device, &queue, config.format);
 
         Self {
             window,
@@ -629,7 +765,11 @@ impl Renderer {
 
             ray_tracing_bind_group,
             targets_bind_groups,
-            // imgui,
+            targets_ping_pong: false,
+
+            present_pipeline,
+            present_sampl_bind_group,
+            present_tex_bind_groups,
         }
     }
 
@@ -652,6 +792,7 @@ impl Renderer {
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -660,25 +801,48 @@ impl Renderer {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                })],
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.target_textures[self.targets_ping_pong as usize]
+                            .prev_color_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.target_textures[self.targets_ping_pong as usize]
+                            .prev_normal_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.target_textures[self.targets_ping_pong as usize]
+                            .prev_mat_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.target_textures[self.targets_ping_pong as usize]
+                            .prev_offset_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.target_textures[self.targets_ping_pong as usize]
+                            .prev_cache_tail_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    }),
+                ],
                 depth_stencil_attachment: None,
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.ray_tracing_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.targets_bind_groups[0], &[]);
+            render_pass.set_bind_group(
+                1,
+                &self.targets_bind_groups[!self.targets_ping_pong as usize],
+                &[],
+            );
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
 
@@ -692,9 +856,32 @@ impl Renderer {
             //     )
             //     .expect("Rendering failed");
         }
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: Default::default(),
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_pipeline(&self.present_pipeline);
+            render_pass.set_bind_group(
+                0,
+                &self.present_tex_bind_groups[self.targets_ping_pong as usize],
+                &[],
+            );
+            render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+        }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+
+        self.targets_ping_pong = !self.targets_ping_pong;
 
         Ok(())
     }
