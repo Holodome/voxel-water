@@ -79,15 +79,14 @@ struct RandomSeed {
 @group(0) @binding(3) var<uniform> projection_matrix: mat4x4f;
 @group(0) @binding(4) var<uniform> view_matrix: mat4x4f;
 
-
-@group(1) @binding(0) var prev_color_tex: texture_2d<f32>;
-@group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
-@group(1) @binding(2) var prev_mat_tex: texture_2d<f32>;
-@group(1) @binding(3) var prev_offset_tex: texture_2d<f32>;
-@group(1) @binding(4) var prev_cache_tail_tex: texture_2d<f32>;
-@group(1) @binding(5) var prev_tex_sampler: sampler;
-@group(1) @binding(6) var<uniform> prev_view_matrix: mat4x4f;
-@group(1) @binding(7) var<uniform> reproject: f32;
+@group(0) @binding(5) var prev_color_tex: texture_2d<f32>;
+@group(0) @binding(6) var prev_normal_tex: texture_2d<f32>;
+@group(0) @binding(7) var prev_mat_tex: texture_2d<f32>;
+@group(0) @binding(8) var prev_offset_tex: texture_2d<f32>;
+@group(0) @binding(9) var prev_cache_tail_tex: texture_2d<f32>;
+@group(0) @binding(10) var prev_tex_sampler: sampler;
+@group(0) @binding(11) var<uniform> prev_view_matrix: mat4x4f;
+@group(0) @binding(12) var<uniform> reproject: f32;
 
 var<private> materials: array<Material, 4> = array(
     Material(

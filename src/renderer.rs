@@ -100,10 +100,22 @@ pub struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 
+    voxel_texture: wgpu::Texture,
+    rng_buffer: wgpu::Buffer,
     inverse_projection_matrix: wgpu::Buffer,
     projection_matrix: wgpu::Buffer,
     view_matrix: wgpu::Buffer,
-    rng_buffer: wgpu::Buffer,
+
+    prev_color_texture: wgpu::Texture,
+    prev_normal_texture: wgpu::Texture,
+    prev_mat_texture: wgpu::Texture,
+    prev_offset_texture: wgpu::Texture,
+    prev_cache_tail_texture: wgpu::Texture,
+    prev_sampler: wgpu::Sampler,
+
+    prev_view_matrix: wgpu::Buffer,
+    reproject: wgpu::Buffer,
+
     ray_tracing_bind_group: wgpu::BindGroup,
     // imgui: Imgui,
 }
@@ -219,6 +231,85 @@ impl Renderer {
             voxel_texture_size,
         );
         let voxel_texture_view = voxel_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let prev_texture_size = wgpu::Extent3d {
+            width: size.width,
+            height: size.height,
+            depth_or_array_layers: 1,
+        };
+        let prev_color_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("prev color texture"),
+            view_formats: &[],
+        });
+        let prev_color_texture_view = prev_color_texture.create_view(&Default::default());
+        let prev_normal_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("prev normal texture"),
+            view_formats: &[],
+        });
+        let prev_normal_texture_view = prev_normal_texture.create_view(&Default::default());
+        let prev_mat_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("prev mat texture"),
+            view_formats: &[],
+        });
+        let prev_mat_texture_view = prev_mat_texture.create_view(&Default::default());
+        let prev_offset_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("prev offset texture"),
+            view_formats: &[],
+        });
+        let prev_offset_texture_view = prev_offset_texture.create_view(&Default::default());
+        let prev_cache_tail_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("prev cache tail texture"),
+            view_formats: &[],
+        });
+        let prev_cache_tail_texture_view = prev_cache_tail_texture.create_view(&Default::default());
+        let prev_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let prev_view_matrix = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("prev view matrix"),
+            contents: bytemuck::bytes_of(&dto.camera.view_matrix),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let reproject_value = 0.0f32;
+        let reproject = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("reproject"),
+            contents: bytemuck::bytes_of(&reproject_value),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let ray_tracing_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -274,6 +365,82 @@ impl Renderer {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 11,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 12,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -299,6 +466,38 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: view_matrix.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&prev_color_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&prev_normal_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: wgpu::BindingResource::TextureView(&prev_mat_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: wgpu::BindingResource::TextureView(&prev_offset_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: wgpu::BindingResource::TextureView(&prev_cache_tail_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 10,
+                    resource: wgpu::BindingResource::Sampler(&prev_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 11,
+                    resource: prev_view_matrix.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 12,
+                    resource: reproject.as_entire_binding(),
                 },
             ],
         });
@@ -361,10 +560,22 @@ impl Renderer {
             size,
             render_pipeline,
             vertex_buffer,
+
+            voxel_texture,
+            rng_buffer,
             inverse_projection_matrix,
             projection_matrix,
             view_matrix,
-            rng_buffer,
+
+            prev_color_texture,
+            prev_normal_texture,
+            prev_mat_texture,
+            prev_offset_texture,
+            prev_cache_tail_texture,
+            prev_sampler,
+            prev_view_matrix,
+            reproject,
+
             ray_tracing_bind_group,
             // imgui,
         }
