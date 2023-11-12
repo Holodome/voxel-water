@@ -1,6 +1,14 @@
 const pi = 3.14159265359;
 const two_pi = 6.28318530718;
 
+const MAT_DIFFUSE: i32 = 0;
+const MAT_METAL: i32 = 1;
+const MAT_DIELECTRIC: i32 = 2;
+
+const VOXEL_SIZE: f32 = 1.0;
+const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
+const MAX_BOUNCE_COUNT: i32 = 4;
+
 struct Onb {
     u: vec3f, 
     v: vec3f, 
@@ -18,9 +26,21 @@ struct VertexOutput {
     @location(2) ray_origin: vec3f
 };
 
-const MAT_DIFFUSE: i32 = 0;
-const MAT_METAL: i32 = 1;
-const MAT_DIELECTRIC: i32 = 2;
+struct FragmentOutput {
+    @location(0) color: vec4f,
+    @location(1) normal: vec3f,
+    @location(2) material_id: f32,
+    @location(3) offset_id: f32,
+    @location(4) cache_tail: f32
+};
+
+struct TraceResult {
+    color: vec3f,
+    normal: vec3f,
+    pos: vec3f,
+    id: u32,
+    offset_id: i32
+};
 
 struct Material {
     albedo: vec3f,
@@ -37,9 +57,10 @@ struct Ray {
 struct HitRecord {
     normal: vec3f,
     pos: vec3f,
+    offset_id: i32,
     t: f32,
     id: u32,
-    has_hit: bool
+    has_hit: bool,
 };
 
 struct ScatterRecord {
@@ -47,30 +68,26 @@ struct ScatterRecord {
     direction: vec3f
 };
 
-const VOXEL_SIZE: f32 = 1.0;
-const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 4;
-
-@group(0) @binding(0)
-var voxel_data: texture_3d<u32>;
-
 struct RandomSeed {
     value: u32,
     p0: u32, p1: u32, p2: u32
 };
 
-// array is just to keep js happy, we actually use only 4 bytes
-@group(0) @binding(1) 
-var<uniform> random_seed: RandomSeed;
+@group(0) @binding(0) var voxel_data: texture_3d<u32>;
+@group(0) @binding(1) var<uniform> random_seed: RandomSeed;
+@group(0) @binding(2) var<uniform> inverse_projection_matrix: mat4x4f;
+@group(0) @binding(3) var<uniform> projection_matrix: mat4x4f;
+@group(0) @binding(4) var<uniform> view_matrix: mat4x4f;
 
-@group(0) @binding(2) 
-var<uniform> inverse_projection_matrix: mat4x4f;
 
-@group(0) @binding(3)
-var<uniform> projection_matrix: mat4x4f;
-
-@group(0) @binding(4)
-var<uniform> view_matrix: mat4x4f;
+@group(1) @binding(0) var prev_color_tex: texture_2d<f32>;
+@group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
+@group(1) @binding(2) var prev_mat_tex: texture_2d<f32>;
+@group(1) @binding(3) var prev_offset_tex: texture_2d<f32>;
+@group(1) @binding(4) var prev_cache_tail_tex: texture_2d<f32>;
+@group(1) @binding(5) var prev_tex_sampler: sampler;
+@group(1) @binding(6) var<uniform> prev_view_matrix: mat4x4f;
+@group(1) @binding(7) var<uniform> reproject: f32;
 
 var<private> materials: array<Material, 4> = array(
     Material(
@@ -84,8 +101,8 @@ var<private> materials: array<Material, 4> = array(
         MAT_DIFFUSE
     ),
     Material(
-        vec3f(0.6, 0.6, 0.9),
-        0.0, 0.4,
+        vec3f(0.7, 0.7, 0.9),
+        0.0, 0.2,
         MAT_DIELECTRIC
     ),
     /*
@@ -102,6 +119,8 @@ var<private> materials: array<Material, 4> = array(
     )
 );
 
+var<private> rng_state: u32;
+
 @vertex 
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
@@ -115,7 +134,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
-var<private> rng_state: u32;
 
 fn construct_onb(n: vec3f) -> Onb {
     let w = normalize(n);
@@ -226,16 +244,19 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
     loop {
         if (t_max.x < t_max.y && t_max.x < t_max.z) {
+            record.offset_id = current_voxel.x;
             record.t = t_max.x;
             record.normal = vec3f(-step.x, 0.0, 0.0);
             t_max.x += t_delta.x;
             current_voxel.x += stepi.x;
         } else if (t_max.y < t_max.z) {
+            record.offset_id = current_voxel.y;
             record.t = t_max.y;
             record.normal = vec3f(0.0, -step.y, 0.0);
             t_max.y += t_delta.y;
             current_voxel.y += stepi.y;
         } else {
+            record.offset_id = current_voxel.z;
             record.t = t_max.z;
             record.normal = vec3f(0.0, 0.0, -step.z);
             t_max.z += t_delta.z;
@@ -300,8 +321,8 @@ fn background(ray: Ray) -> vec3f {
     return vec3f(0.5);
 }
 
-fn trace(ray_: Ray) -> vec3f {
-    var result = vec3f(1.0);
+fn trace(ray_: Ray) -> TraceResult {
+    var result: TraceResult;
     var ray = ray_;
 
     var i: i32 = 0;
@@ -309,15 +330,20 @@ fn trace(ray_: Ray) -> vec3f {
         let hrec = voxel_traverse(ray);
         if (!hrec.has_hit) {
             if (i == 0) {
-                result = background(ray);
+                result.color = background(ray);
             }
             break;
         }
 
         let srec = scatter(ray, hrec);
-        result *= srec.attenuation;
+        result.color *= srec.attenuation;
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
+
+        result.pos = hrec.pos;
+        result.id = hrec.id;
+        result.normal = hrec.normal;
+        result.offset_id = hrec.offset_id;
 
         /*
         if i > 3 {
@@ -333,12 +359,45 @@ fn trace(ray_: Ray) -> vec3f {
     return result;
 }
 
-fn ray_color(ray: Ray) -> vec3f {
-    return trace(ray);
+fn temporal_reverse_reprojection(fs: TraceResult) -> FragmentOutput {
+    var result: FragmentOutput;
+    result.color = vec4f(fs.color, 1.0);
+    result.normal = fs.normal;
+    result.material_id = f32(fs.id);
+    result.offset_id = f32(fs.offset_id);
+
+    let point = projection_matrix * prev_view_matrix * vec4f(fs.pos, 1.0);
+    let p = point.xyz / point.w;
+    let prev_uv = vec2f((p.x / 2.0) + 0.5, (p.y / 2.0) + 0.5);
+    let prev_normal = textureSample(prev_normal_tex, prev_tex_sampler, prev_uv).rgb;
+    let prev_offset_id = textureSample(prev_offset_tex, prev_tex_sampler, prev_uv).r;
+    let prev_mat_id = textureSample(prev_mat_tex, prev_tex_sampler, prev_uv).r;
+    let prev_cache_tail = textureSample(prev_cache_tail_tex, prev_tex_sampler, prev_uv).r;
+    let prev_color = textureSample(prev_color_tex, prev_tex_sampler, prev_uv).rgb;
+
+    if (result.material_id != 0.0) {
+        if (prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
+            prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
+            result.material_id == prev_mat_id && 
+            distance(result.normal, prev_normal) < 0.1 && 
+            result.offset_id == prev_offset_id) {
+            let alpha = (1.0 / 9.0) * reproject;
+            result.cache_tail = (1.0 - alpha) * prev_cache_tail;
+            result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
+        } else {
+            // missed the cache
+            result.cache_tail = 1.0;
+        }
+    } else {
+        // ray didn't hit anything
+        result.cache_tail = 0.0;
+    }
+
+    return result;
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+fn fs_main(in: VertexOutput) -> FragmentOutput {
     rng_state = xorshift32(bitcast<u32>(in.uv.x * 123.0 +
                                         in.uv.y * 987.0) 
                            * random_seed.value);
@@ -348,5 +407,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         in.ray_direction
     );
 
-    return vec4f(ray_color(ray), 1.0);
+    return temporal_reverse_reprojection(trace(ray));
 }
