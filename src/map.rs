@@ -4,7 +4,7 @@ use crate::renderer::MapDTO;
 use rand::Rng;
 
 #[repr(u8)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Cell {
     None = 0,
     Grass = 1,
@@ -79,6 +79,7 @@ impl Map {
     pub fn with_perlin(x: usize, y: usize, z: usize, perlin: &mut Perlin) -> Self {
         let cells = vec![Cell::None; x * y * z];
         let mut map = Self { x, y, z, cells };
+        let mut min_height = usize::MAX;
         for px in 0..x {
             for pz in 0..z {
                 let p = Vector3::new(px as f32 / x as f32, 0.0, pz as f32 / z as f32);
@@ -89,6 +90,9 @@ impl Map {
                     let cell = if py < height - 1 {
                         Cell::Ground
                     } else if py == height - 1 {
+                        if py < min_height {
+                            min_height = py;
+                        }
                         Cell::Grass
                     } else {
                         Cell::None
@@ -97,6 +101,16 @@ impl Map {
                 }
             }
         }
+
+        for px in 0..x {
+            for pz in 0..z {
+                let cur = map.at(px, min_height, pz);
+                if let Cell::Grass = cur {
+                    *map.at_mut(px, min_height, pz) = Cell::Stone;
+                }
+            }
+        }
+
         map
     }
 

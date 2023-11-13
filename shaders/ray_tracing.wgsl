@@ -37,6 +37,7 @@ struct FragmentOutput {
 struct TraceResult {
     color: vec3f,
     normal: vec3f,
+    front_normal: vec3f,
     pos: vec3f,
     id: u32,
     offset_id: i32
@@ -101,7 +102,7 @@ var<private> materials: array<Material, 4> = array(
     ),
     Material(
         vec3f(0.7, 0.7, 0.9),
-        0.0, 0.2,
+        0.0, 0.1,
         MAT_DIELECTRIC
     ),
     /*
@@ -363,7 +364,7 @@ fn trace(ray_: Ray) -> TraceResult {
 fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
     var result: FragmentOutput;
     result.color = vec4f(fs.color, 1.0);
-    result.normal = vec4f(fs.normal, 0.0);
+    result.normal = vec4f((fs.normal + vec3f(1.0)) * 0.5, 0.0);
     result.material_id = f32(fs.id);
     result.offset_id = f32(fs.offset_id);
 
