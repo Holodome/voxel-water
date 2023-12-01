@@ -333,6 +333,10 @@ impl Renderer {
             label: Some("present shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/present.wgsl").into()),
         });
+        let gauss_vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("gauss vert"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/gauss_vert.wgsl").into()),
+        });
 
         let rng_seed = [0u32; 4];
         let rng_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

@@ -38,3 +38,7 @@ imgui = { version = "0.11.0", features = ["wasm"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
