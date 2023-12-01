@@ -3,6 +3,7 @@ use crate::map::{Cell, Map};
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
+use crate::renderer::MaterialDTO;
 use crate::renderer::{Renderer, WorldDTO};
 use winit::{
     event::*,
@@ -36,23 +37,26 @@ impl App {
         // let map = Map::cube(10, 10, 10);
 
         let materials = vec![
-            Material {
-                color: Cell::None.color(),
-            },
-            Material {
-                color: Cell::Grass.color(),
-            },
-            Material {
-                color: Cell::Stone.color(),
-            },
-            Material {
-                color: Cell::Ground.color(),
-            },
+            Material::diffuse(Vector3::new(0.0, 0.0, 0.0)),
+            Material::diffuse(Vector3::new(
+                0.44313725490196076,
+                0.6666666666666666,
+                0.20392156862745098,
+            )),
+            Material::dielectric(Vector3::new(0.7, 0.7, 0.9), 0.1),
+            Material::metal(
+                Vector3::new(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
+                0.5,
+            ),
         ];
+        let material_dto = materials
+            .iter()
+            .map(|it| it.as_dto())
+            .collect::<Vec<MaterialDTO>>();
         let dto = WorldDTO {
             camera: camera.as_dto(),
             map: map.as_dto(),
-            materials: &materials,
+            materials: &material_dto,
         };
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();

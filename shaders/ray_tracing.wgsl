@@ -82,6 +82,7 @@ struct RandomSeed {
 @group(0) @binding(5) var prev_tex_sampler: sampler;
 @group(0) @binding(6) var<uniform> prev_view_matrix: mat4x4f;
 @group(0) @binding(7) var<uniform> reproject: f32;
+@group(0) @binding(8) var<uniform> materials: array<Material, 256>;
 
 @group(1) @binding(0) var prev_color_tex: texture_2d<f32>;
 @group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
@@ -89,6 +90,7 @@ struct RandomSeed {
 @group(1) @binding(3) var prev_offset_tex: texture_2d<f32>;
 @group(1) @binding(4) var prev_cache_tail_tex: texture_2d<f32>;
 
+/*
 var<private> materials: array<Material, 4> = array(
     Material(
         vec3f(0.0, 0.0, 0.0),
@@ -105,19 +107,13 @@ var<private> materials: array<Material, 4> = array(
         0.0, 0.1,
         MAT_DIELECTRIC
     ),
-    /*
-    Material(
-        vec3f(0.49019607843137253, 0.4392156862745098, 0.44313725490196076),
-        0.0, 0.0,
-        MAT_DIFFUSE
-    ),
-    */
     Material(
         vec3f(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
         0.5, 0.0, 
         MAT_METAL
     )
 );
+*/
 
 var<private> rng_state: u32;
 

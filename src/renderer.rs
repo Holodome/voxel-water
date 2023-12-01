@@ -80,14 +80,20 @@ pub struct MapDTO<'a> {
     pub cells: &'a [u8],
 }
 
-#[derive(Clone, Debug)]
-pub struct MaterialDTO {}
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MaterialDTO {
+    pub albedo: Vector3,
+    pub fuzz: f32,
+    pub refractive_index: f32,
+    pub kind: i32,
+}
 
 #[derive(Clone, Debug)]
 pub struct WorldDTO<'a> {
     pub camera: CameraDTO,
     pub map: MapDTO<'a>,
-    pub materials: &'a [Material],
+    pub materials: &'a [MaterialDTO],
 }
 
 struct TargetTextures {
@@ -350,6 +356,25 @@ impl Renderer {
             contents: bytemuck::bytes_of(&dto.camera.view_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        let textures_vec = {
+            let mut v = Vec::<MaterialDTO>::with_capacity(256);
+            v.resize_with(256, || MaterialDTO {
+                albedo: Vector3::zeros(),
+                fuzz: 0.0,
+                refractive_index: 0.0,
+                kind: 0,
+            });
+            for (i, it) in dto.materials.iter().enumerate() {
+                v[i] = it.clone();
+            }
+
+            v
+        };
+        let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("materials"),
+            contents: bytemuck::cast_slice(&textures_vec),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let voxel_texture_size = wgpu::Extent3d {
             width: dto.map.x as u32,
             height: dto.map.y as u32,
@@ -491,6 +516,16 @@ impl Renderer {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -528,6 +563,10 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 7,
                     resource: reproject.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: material_buffer.as_entire_binding(),
                 },
             ],
         });
