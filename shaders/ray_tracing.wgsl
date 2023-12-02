@@ -5,7 +5,7 @@ const MAT_DIFFUSE: i32 = 0;
 const MAT_METAL: i32 = 1;
 const MAT_DIELECTRIC: i32 = 2;
 
-const VOXEL_SIZE: f32 = 1.0;
+const VOXEL_SIZE: f32 = 0.5;
 const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
 const MAX_BOUNCE_COUNT: i32 = 4;
 
@@ -90,32 +90,8 @@ struct RandomSeed {
 @group(1) @binding(3) var prev_offset_tex: texture_2d<f32>;
 @group(1) @binding(4) var prev_cache_tail_tex: texture_2d<f32>;
 
-/*
-var<private> materials: array<Material, 4> = array(
-    Material(
-        vec3f(0.0, 0.0, 0.0),
-        0.0, 0.0,
-        MAT_DIFFUSE
-    ),
-    Material(
-        vec3f(0.44313725490196076, 0.6666666666666666, 0.20392156862745098),
-        0.0, 0.0,
-        MAT_DIFFUSE
-    ),
-    Material(
-        vec3f(0.7, 0.7, 0.9),
-        0.0, 0.1,
-        MAT_DIELECTRIC
-    ),
-    Material(
-        vec3f(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
-        0.5, 0.0, 
-        MAT_METAL
-    )
-);
-*/
-
 var<private> rng_state: u32;
+var<private> is_in_water: bool = false;
 
 @vertex 
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -125,7 +101,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.uv = in.uv;
     let t1 = inverse_projection_matrix * vec4f(pos, -1.0, 1.0);
     let t2 = view_matrix * vec4f(t1.xyz, 0.0);
-    out.ray_direction = normalize(t2.xyz);
+    out.ray_direction = t2.xyz;
     out.ray_origin = vec3f(view_matrix[3][0], view_matrix[3][1], view_matrix[3][2]);
     return out;
 }
@@ -238,6 +214,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
     let t_delta = VOXEL_SIZE / direction * step;
     var i: i32 = 0;
 
+    var original_id = textureLoad(voxel_data, current_voxel, 0).r;
     loop {
         if (t_max.x < t_max.y && t_max.x < t_max.z) {
             record.offset_id = current_voxel.x;
@@ -260,10 +237,23 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
         }
 
         record.id = textureLoad(voxel_data, current_voxel, 0).r;
-        if (record.id != 0u) {
-            record.pos = ray_at(ray, record.t);
-            break;
+        if is_in_water {
+            if (record.id != 2u) {
+                if (record.id == 0u) {
+                    record.id = original_id;
+                    record.pos = ray_at(ray, record.t + 0.001);
+                } else {
+                    record.pos = ray_at(ray, record.t);
+                }
+                break;
+            }
+        } else {
+            if (record.id != 0u) {
+                record.pos = ray_at(ray, record.t + 0.001);
+                break;
+            }
         }
+        original_id = record.id;
 
         i += 1;
         if (i >= MAXIMUM_TRAVERSAL_DISTANCE) {
@@ -290,6 +280,7 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
             srec.attenuation = material.albedo;
         }
         case 2 /* MAT_DIELECTRIC */: {
+            ///*
             var refraction_ratio = material.refractive_index;
             if dot(ray.direction, hrec.normal) <= 0.0 {
                 refraction_ratio = 1.0 / refraction_ratio;
@@ -297,15 +288,16 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
             let cos_theta = min(dot(-ray.direction, hrec.normal), 1.0);
             let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
-            if material.refractive_index * sin_theta > 1.0 || 
-               schlick(cos_theta, material.refractive_index) > random_f32() {
+            if refraction_ratio * sin_theta > 1.0 || 
+               schlick(cos_theta, refraction_ratio) > random_f32() {
                 srec.direction = reflect(ray.direction, hrec.normal);
+                srec.attenuation = vec3f(1.0);
             } else {
                 srec.direction = refract(ray.direction, hrec.normal, 
-                                         material.refractive_index);
+                                            refraction_ratio);
+                is_in_water = !is_in_water;
+                srec.attenuation = material.albedo;
             }
-
-            srec.attenuation = material.albedo;
         }
     }
 
@@ -382,7 +374,7 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
             distance(result.normal.xyz, prev_normal) < 0.1 && 
             result.offset_id == prev_offset_id
         ) {
-            let alpha = (1.0 / 5.0) * reproject;
+            let alpha = (1.0 / 9.0) * reproject;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;
             result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
         } else {
@@ -402,7 +394,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     let ray = Ray(
         in.ray_origin,
-        in.ray_direction
+        normalize(in.ray_direction)
     );
 
     return temporal_reverse_reprojection(trace(ray), in.uv);

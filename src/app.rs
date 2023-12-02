@@ -43,7 +43,7 @@ impl App {
                 0.6666666666666666,
                 0.20392156862745098,
             )),
-            Material::dielectric(Vector3::new(0.7, 0.7, 0.9), 0.1),
+            Material::dielectric(Vector3::new(0.5, 0.5, 0.9), 2.045),
             Material::metal(
                 Vector3::new(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
                 0.5,
