@@ -272,6 +272,7 @@ pub struct Renderer {
     gauss_vert_bind_group: wgpu::BindGroup,
 
     last_view_matrix: Matrix4,
+    should_update_last_view_matrix: bool,
 }
 
 impl Renderer {
@@ -938,7 +939,8 @@ impl Renderer {
             gauss_vert_texture_view,
             gauss_vert_bind_group,
 
-            last_view_matrix: dto.camera.view_matrix,
+            last_view_matrix: dto.camera.view_matrix.try_inverse().unwrap(),
+            should_update_last_view_matrix: true,
         }
     }
 
@@ -1089,28 +1091,40 @@ impl Renderer {
         self.queue
             .write_buffer(&self.rng_buffer, 0, bytemuck::bytes_of(&seed));
     }
-    pub fn update_camera(&mut self, camera: &CameraDTO) {
-        self.queue.write_buffer(
-            &self.prev_view_matrix,
-            0,
-            bytemuck::bytes_of(&self.last_view_matrix),
-        );
-        self.queue.write_buffer(
-            &self.view_matrix,
-            0,
-            bytemuck::bytes_of(&camera.view_matrix),
-        );
-        self.queue.write_buffer(
-            &self.projection_matrix,
-            0,
-            bytemuck::bytes_of(&camera.projection_matrix),
-        );
-        self.queue.write_buffer(
-            &self.inverse_projection_matrix,
-            0,
-            bytemuck::bytes_of(&camera.inverse_projection_matrix),
-        );
-        self.last_view_matrix = camera.view_matrix.try_inverse().unwrap();
+    pub fn update_camera(&mut self, camera: &CameraDTO, camera_was_changed: bool) {
+        if self.should_update_last_view_matrix && !camera_was_changed {
+            self.last_view_matrix = camera.view_matrix.try_inverse().unwrap();
+            self.queue.write_buffer(
+                &self.prev_view_matrix,
+                0,
+                bytemuck::bytes_of(&self.last_view_matrix),
+            );
+            self.should_update_last_view_matrix = false;
+        }
+        if camera_was_changed {
+            self.should_update_last_view_matrix = true;
+            self.queue.write_buffer(
+                &self.prev_view_matrix,
+                0,
+                bytemuck::bytes_of(&self.last_view_matrix),
+            );
+            self.queue.write_buffer(
+                &self.view_matrix,
+                0,
+                bytemuck::bytes_of(&camera.view_matrix),
+            );
+            self.queue.write_buffer(
+                &self.projection_matrix,
+                0,
+                bytemuck::bytes_of(&camera.projection_matrix),
+            );
+            self.queue.write_buffer(
+                &self.inverse_projection_matrix,
+                0,
+                bytemuck::bytes_of(&camera.inverse_projection_matrix),
+            );
+            self.last_view_matrix = camera.view_matrix.try_inverse().unwrap();
+        }
     }
 
     // pub fn get_frame(&mut self) -> &mut imgui::Ui {

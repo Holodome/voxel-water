@@ -138,7 +138,8 @@ impl App {
         }
 
         // if camera_was_changed {
-        self.renderer.update_camera(&self.camera.as_dto());
+        self.renderer
+            .update_camera(&self.camera.as_dto(), camera_was_changed);
         // }
 
         // {
