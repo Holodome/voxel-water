@@ -18,16 +18,15 @@ struct VertexOutput {
 };
 
 @group(0) @binding(0) var tex: texture_2d<f32>;
-@group(0) @binding(1) var<uniform> target_height: f32;
-
 @group(1) @binding(0) var samp: sampler;
+@group(1) @binding(1) var<uniform> target_size: vec2f;
 
 @vertex fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     let pos = (in.uv * 2.0) - vec2f(1.0);
     out.pos = vec4f(pos, 0.0, 1.0);
     let center_uv = (pos + vec2f(1.0)) * 0.5;
-    let px_size = 1.0 / target_height;
+    let px_size = 1.0 / target_size.y;
 
     out.blur_uv0 = center_uv + vec2f(px_size * f32(-5), 0.0);
     out.blur_uv1 = center_uv + vec2f(px_size * f32(-4), 0.0);

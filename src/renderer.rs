@@ -1,6 +1,4 @@
-use crate::materials::Material;
 use crate::math::*;
-use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -268,6 +266,11 @@ pub struct Renderer {
     present_sampl_bind_group: wgpu::BindGroup,
     present_tex_bind_groups: [wgpu::BindGroup; 2],
 
+    gauss_vert_pipeline: wgpu::RenderPipeline,
+    gauss_horiz_pipeline: wgpu::RenderPipeline,
+    gauss_vert_texture_view: wgpu::TextureView,
+    gauss_vert_bind_group: wgpu::BindGroup,
+
     last_view_matrix: Matrix4,
 }
 
@@ -336,6 +339,10 @@ impl Renderer {
         let gauss_vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("gauss vert"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/gauss_vert.wgsl").into()),
+        });
+        let gauss_horiz_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("gauss horiz"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/gauss_horiz.wgsl").into()),
         });
 
         let rng_seed = [0u32; 4];
@@ -439,6 +446,25 @@ impl Renderer {
             contents: bytemuck::bytes_of(&reproject_value),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        let texture_size_v = Vector2::new(size.width as f32, size.height as f32);
+        let texture_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("texture size"),
+            contents: bytemuck::bytes_of(&texture_size_v),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let gauss_vert_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: prev_texture_size.clone(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: config.format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: Some("gauss vert texture"),
+            view_formats: &[],
+        });
+        let gauss_vert_texture_view = gauss_vert_texture.create_view(&Default::default());
 
         let ray_tracing_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -652,23 +678,49 @@ impl Renderer {
             target_textures[0].present_bind_group(&device, &present_tex_bind_group_layout),
             target_textures[1].present_bind_group(&device, &present_tex_bind_group_layout),
         ];
+        let gauss_vert_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gauss bind group"),
+            layout: &present_tex_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&gauss_vert_texture_view),
+            }],
+        });
         let present_sampl_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("present bind group"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                }],
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
         let present_sampl_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("present sampl bind group"),
             layout: &present_sampl_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&prev_sampler),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&prev_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: texture_size_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let render_pipeline_layout =
@@ -686,6 +738,74 @@ impl Renderer {
                 ],
                 push_constant_ranges: &[],
             });
+        let gauss_horiz_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("gauss vert pipeline"),
+            layout: Some(&present_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &gauss_horiz_shader,
+                entry_point: "vs_main",
+                buffers: &[DisplayVertex::desc()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &gauss_horiz_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+        });
+        let gauss_vert_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("gauss vert pipeline"),
+            layout: Some(&present_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &gauss_vert_shader,
+                entry_point: "vs_main",
+                buffers: &[DisplayVertex::desc()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &gauss_vert_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+        });
         let present_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("present pipeline"),
             layout: Some(&present_pipeline_layout),
@@ -813,6 +933,11 @@ impl Renderer {
             present_sampl_bind_group,
             present_tex_bind_groups,
 
+            gauss_vert_pipeline,
+            gauss_horiz_pipeline,
+            gauss_vert_texture_view,
+            gauss_vert_bind_group,
+
             last_view_matrix: dto.camera.view_matrix,
         }
     }
@@ -889,17 +1014,46 @@ impl Renderer {
             );
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
-
-            // self.imgui
-            //     .renderer
-            //     .render(
-            //         self.imgui.imgui.render(),
-            //         &self.queue,
-            //         &self.device,
-            //         &mut render_pass,
-            //     )
-            //     .expect("Rendering failed");
         }
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("gauss vert render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.gauss_vert_texture_view,
+                    resolve_target: None,
+                    ops: Default::default(),
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_pipeline(&self.gauss_vert_pipeline);
+            render_pass.set_bind_group(
+                0,
+                &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
+                &[],
+            );
+            render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+        }
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("gauss horiz render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: Default::default(),
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_pipeline(&self.gauss_horiz_pipeline);
+            render_pass.set_bind_group(0, &self.gauss_vert_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+        }
+        /*
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render pass"),
@@ -912,15 +1066,12 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.present_pipeline);
-            render_pass.set_bind_group(
-                0,
-                &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
-                &[],
-            );
+            render_pass.set_bind_group(0, &self.gauss_horiz_bind_group, &[]);
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
         }
+        */
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
