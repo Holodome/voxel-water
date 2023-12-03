@@ -282,10 +282,11 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
         case 2 /* MAT_DIELECTRIC */: {
             ///*
             var refraction_ratio = material.refractive_index;
-            if dot(ray.direction, hrec.normal) <= 0.0 {
+            let rn = dot(ray.direction, hrec.normal);
+            if rn <= 0.0 {
                 refraction_ratio = 1.0 / refraction_ratio;
             }
-            let cos_theta = min(dot(-ray.direction, hrec.normal), 1.0);
+            let cos_theta = min(-rn, 1.0);
             let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
             if refraction_ratio * sin_theta > 1.0 || 
@@ -304,22 +305,31 @@ fn scatter(ray: Ray, hrec: HitRecord) -> ScatterRecord {
     return srec;
 }
 
-fn background(ray: Ray) -> vec3f {
-    return vec3f(0.5);
-}
-
 fn trace(ray_: Ray) -> TraceResult {
     var result: TraceResult;
     result.color = vec3f(1.0);
     var ray = ray_;
 
-    var i: i32 = 0;
+    let hrec = voxel_traverse(ray);
+    if hrec.id == 0u {
+        result.color = vec3f(0.5);
+        return result;
+    }
+
+    let srec = scatter(ray, hrec);
+    result.color *= srec.attenuation;
+    ray.origin = hrec.pos;
+    ray.direction = normalize(srec.direction);
+
+    result.pos = hrec.pos;
+    result.id = hrec.id;
+    result.normal = hrec.normal;
+    result.offset_id = hrec.offset_id;
+
+    var i: i32 = 1;
     for (; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
         if hrec.id == 0u {
-            if i == 0 {
-                result.color = background(ray);
-            }
             break;
         }
 
@@ -327,13 +337,6 @@ fn trace(ray_: Ray) -> TraceResult {
         result.color *= srec.attenuation;
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
-
-        if i == 0 {
-            result.pos = hrec.pos;
-            result.id = hrec.id;
-            result.normal = hrec.normal;
-            result.offset_id = hrec.offset_id;
-        }
 
         /*
         if i > 3 {
