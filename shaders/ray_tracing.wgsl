@@ -6,8 +6,8 @@ const MAT_METAL: i32 = 1;
 const MAT_DIELECTRIC: i32 = 2;
 
 const VOXEL_SIZE: f32 = 0.5;
-const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 128;
-const MAX_BOUNCE_COUNT: i32 = 4;
+const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 64;
+const MAX_BOUNCE_COUNT: i32 = 3;
 
 struct Onb {
     u: vec3f, 

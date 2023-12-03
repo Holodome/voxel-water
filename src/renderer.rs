@@ -273,6 +273,8 @@ pub struct Renderer {
 
     last_view_matrix: Matrix4,
     should_update_last_view_matrix: bool,
+
+    imgui: Imgui,
 }
 
 impl Renderer {
@@ -904,7 +906,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        // let imgui = Imgui::new(&window, &device, &queue, config.format);
+        let imgui = Imgui::new(&window, &device, &queue, config.format);
 
         Self {
             window,
@@ -941,6 +943,8 @@ impl Renderer {
 
             last_view_matrix: dto.camera.view_matrix.try_inverse().unwrap(),
             should_update_last_view_matrix: true,
+
+            imgui,
         }
     }
 
@@ -953,10 +957,10 @@ impl Renderer {
     }
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.surface.configure(&self.device, &self.config);
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
+            self.surface.configure(&self.device, &self.config);
         }
     }
 
@@ -1054,6 +1058,16 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+
+            self.imgui
+                .renderer
+                .render(
+                    self.imgui.imgui.render(),
+                    &self.queue,
+                    &self.device,
+                    &mut render_pass,
+                )
+                .unwrap();
         }
 
         /*
@@ -1089,7 +1103,7 @@ impl Renderer {
     }
 
     pub fn update_time(&mut self, time: std::time::Duration) {
-        // self.imgui.update_time(time);
+        self.imgui.update_time(time);
     }
 
     pub fn update_random_seed(&mut self, seed: u32) {
@@ -1132,15 +1146,15 @@ impl Renderer {
         }
     }
 
-    // pub fn get_frame(&mut self) -> &mut imgui::Ui {
-    //     self.imgui.get_frame()
-    // }
+    pub fn get_frame(&mut self) -> &mut imgui::Ui {
+        self.imgui.get_frame()
+    }
 
-    // pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
-    //     self.imgui
-    //         .platform
-    //         .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
-    // }
+    pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
+        self.imgui
+            .platform
+            .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
+    }
 }
 
 #[repr(C)]

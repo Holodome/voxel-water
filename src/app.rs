@@ -142,35 +142,33 @@ impl App {
             camera_was_changed = true;
         }
 
-        // if camera_was_changed {
         self.renderer
             .update_camera(&self.camera.as_dto(), camera_was_changed);
-        // }
 
-        // {
-        //     let ui = self.renderer.get_frame();
-        //     let window = ui.window("Hello world");
-        //     window
-        //         .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-        //         .build(|| {
-        //             ui.text("Hello world!");
-        //             ui.text("This...is...imgui-rs on WGPU!");
-        //             ui.separator();
-        //             let mouse_pos = ui.io().mouse_pos;
-        //             ui.text(format!(
-        //                 "Mouse Position: ({:.1},{:.1})",
-        //                 mouse_pos[0], mouse_pos[1]
-        //             ));
-        //         });
+        {
+            let ui = self.renderer.get_frame();
+            let window = ui.window("Hello world");
+            window
+                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                .build(|| {
+                    ui.text("Hello world!");
+                    ui.text("This...is...imgui-rs on WGPU!");
+                    ui.separator();
+                    let mouse_pos = ui.io().mouse_pos;
+                    ui.text(format!(
+                        "Mouse Position: ({:.1},{:.1})",
+                        mouse_pos[0], mouse_pos[1]
+                    ));
+                });
 
-        //     let window = ui.window("Hello too");
-        //     window
-        //         .size([400.0, 200.0], imgui::Condition::FirstUseEver)
-        //         .position([400.0, 200.0], imgui::Condition::FirstUseEver)
-        //         .build(|| {
-        //             ui.text(format!("Frametime: {time_delta:?}"));
-        //         });
-        // };
+            let window = ui.window("Hello too");
+            window
+                .size([400.0, 200.0], imgui::Condition::FirstUseEver)
+                .position([400.0, 200.0], imgui::Condition::FirstUseEver)
+                .build(|| {
+                    ui.text(format!("Frametime: {time_delta:?}"));
+                });
+        };
 
         self.map.simulate(&mut self.rng);
         match self.renderer.render() {
@@ -183,6 +181,7 @@ impl App {
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) {
+        let mut is_initialized = false;
         event_loop.run(move |event, _, control_flow| {
             control_flow.set_poll();
             match event {
@@ -196,9 +195,16 @@ impl App {
                     self.render(control_flow);
                 }
                 Event::MainEventsCleared => self.renderer.window().request_redraw(),
+                Event::NewEvents(cause) => {
+                    if cause == StartCause::Poll {
+                        is_initialized = true;
+                    }
+                }
                 _ => {}
             }
-            // self.renderer.handle_input(&event);
+            if is_initialized {
+                self.renderer.handle_input(&event);
+            }
         });
     }
 }
