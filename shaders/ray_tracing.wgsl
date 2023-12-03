@@ -151,7 +151,7 @@ fn random_in_unit_sphere() -> vec3f {
     var p: vec3f;
     loop {
         p = random_vec3f_range(-1.0, 1.0);
-        if (dot(p, p) < 1.0) {
+        if dot(p, p) < 1.0 {
             break;
         }
     }
@@ -190,7 +190,7 @@ fn ray_at(ray: Ray, t: f32) -> vec3f {
 }
 
 fn safe_sign(x: f32) -> f32 {
-    if (x <= 0.0) {
+    if x <= 0.0 {
         return -1.0;
     }
     return 1.0;
@@ -216,13 +216,13 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
     var original_id = textureLoad(voxel_data, current_voxel, 0).r;
     loop {
-        if (t_max.x < t_max.y && t_max.x < t_max.z) {
+        if t_max.x < t_max.y && t_max.x < t_max.z {
             record.offset_id = current_voxel.x;
             record.t = t_max.x;
             record.normal = vec3f(-step.x, 0.0, 0.0);
             t_max.x += t_delta.x;
             current_voxel.x += stepi.x;
-        } else if (t_max.y < t_max.z) {
+        } else if t_max.y < t_max.z {
             record.offset_id = current_voxel.y;
             record.t = t_max.y;
             record.normal = vec3f(0.0, -step.y, 0.0);
@@ -238,8 +238,8 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
         record.id = textureLoad(voxel_data, current_voxel, 0).r;
         if is_in_water {
-            if (record.id != 2u) {
-                if (record.id == 0u) {
+            if record.id != 2u {
+                if record.id == 0u {
                     record.id = original_id;
                     record.pos = ray_at(ray, record.t + 0.001);
                 } else {
@@ -248,7 +248,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
                 break;
             }
         } else {
-            if (record.id != 0u) {
+            if record.id != 0u {
                 record.pos = ray_at(ray, record.t + 0.001);
                 break;
             }
@@ -256,7 +256,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
         original_id = record.id;
 
         i += 1;
-        if (i >= MAXIMUM_TRAVERSAL_DISTANCE) {
+        if i >= MAXIMUM_TRAVERSAL_DISTANCE {
             break;
         }
     }
@@ -316,8 +316,8 @@ fn trace(ray_: Ray) -> TraceResult {
     var i: i32 = 0;
     for (; i < MAX_BOUNCE_COUNT; i += 1) {
         let hrec = voxel_traverse(ray);
-        if (hrec.id == 0u) {
-            if (i == 0) {
+        if hrec.id == 0u {
+            if i == 0 {
                 result.color = background(ray);
             }
             break;
@@ -328,7 +328,7 @@ fn trace(ray_: Ray) -> TraceResult {
         ray.origin = hrec.pos;
         ray.direction = normalize(srec.direction);
 
-        if (i == 0) {
+        if i == 0 {
             result.pos = hrec.pos;
             result.id = hrec.id;
             result.normal = hrec.normal;
@@ -367,13 +367,13 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
     let prev_cache_tail = textureSample(prev_cache_tail_tex, prev_tex_sampler, prev_uv).r;
     let prev_color = textureSample(prev_color_tex, prev_tex_sampler, prev_uv).rgb;
     
-    if (result.material_id != 0.0) {
-        if (prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
+    if result.material_id != 0.0 {
+        if prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
             prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
             result.material_id == prev_mat_id && 
             distance(result.normal.xyz, prev_normal) < 0.1 && 
             result.offset_id == prev_offset_id
-        ) {
+        {
             let alpha = (1.0 / 9.0) * reproject;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;
             result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);

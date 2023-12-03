@@ -26,7 +26,7 @@ struct VertexOutput {
     let pos = (in.uv * 2.0) - vec2f(1.0);
     out.pos = vec4f(pos, 0.0, 1.0);
     let center_uv = (pos + vec2f(1.0)) * 0.5;
-    let px_size = 1.0 / target_size.y;
+    let px_size = 1.0 / target_size.x;
 
     out.blur_uv0 = center_uv + vec2f(px_size * f32(-5), 0.0);
     out.blur_uv1 = center_uv + vec2f(px_size * f32(-4), 0.0);

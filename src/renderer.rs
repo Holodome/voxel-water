@@ -1055,6 +1055,7 @@ impl Renderer {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
         }
+
         /*
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1068,7 +1069,11 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.present_pipeline);
-            render_pass.set_bind_group(0, &self.gauss_horiz_bind_group, &[]);
+            render_pass.set_bind_group(
+                0,
+                &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
+                &[],
+            );
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
