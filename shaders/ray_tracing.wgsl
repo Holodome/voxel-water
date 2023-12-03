@@ -377,7 +377,7 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
             distance(result.normal.xyz, prev_normal) < 0.1 && 
             result.offset_id == prev_offset_id
         {
-            let alpha = (1.0 / 9.0) * reproject;
+            let alpha = (1.0 / 10.0) * reproject;
             result.cache_tail = (1.0 - alpha) * prev_cache_tail;
             result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
         } else {

@@ -247,6 +247,7 @@ pub struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 
+    voxel_texture_size: wgpu::Extent3d,
     voxel_texture: wgpu::Texture,
     rng_buffer: wgpu::Buffer,
     inverse_projection_matrix: wgpu::Buffer,
@@ -918,6 +919,7 @@ impl Renderer {
             render_pipeline,
             vertex_buffer,
 
+            voxel_texture_size,
             voxel_texture,
             rng_buffer,
             inverse_projection_matrix,
@@ -1144,6 +1146,24 @@ impl Renderer {
             );
             self.last_view_matrix = camera.view_matrix.try_inverse().unwrap();
         }
+    }
+
+    pub fn update_map(&mut self, dto: MapDTO) {
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.voxel_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            bytemuck::cast_slice(dto.cells),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: self.voxel_texture_size.width.into(),
+                rows_per_image: self.voxel_texture_size.height.into(),
+            },
+            self.voxel_texture_size,
+        );
     }
 
     pub fn get_frame(&mut self) -> &mut imgui::Ui {
