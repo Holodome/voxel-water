@@ -10,6 +10,7 @@ mod materials;
 mod math;
 mod perlin;
 mod renderer;
+mod xorshift32;
 
 use app::App;
 

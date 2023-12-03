@@ -1,6 +1,7 @@
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::MapDTO;
+use rand::prelude::SliceRandom;
 use rand::Rng;
 
 #[repr(u8)]
@@ -8,7 +9,7 @@ use rand::Rng;
 pub enum Cell {
     None = 0,
     Grass = 1,
-    Stone = 2,
+    Water = 2,
     Ground = 3,
 }
 
@@ -19,16 +20,31 @@ impl From<Cell> for u8 {
 }
 
 impl Cell {
-    pub fn color(self) -> u32 {
+    fn is_water(&self) -> bool {
+        if let Self::Water = self {
+            return true;
+        }
+
+        false
+    }
+    fn is_air(&self) -> bool {
+        if let Self::None = self {
+            return true;
+        }
+
+        false
+    }
+    fn is_solid(&self) -> bool {
         match self {
-            Self::None => 0x0,
-            Self::Grass => 0x71aa34,
-            Self::Stone => 0x7d7071,
-            Self::Ground => 0xa05b53,
+            Self::None => false,
+            Self::Grass => true,
+            Self::Water => false,
+            Self::Ground => false,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Map {
     x: usize,
     y: usize,
@@ -37,19 +53,6 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn x(&self) -> usize {
-        self.x
-    }
-    pub fn y(&self) -> usize {
-        self.y
-    }
-    pub fn z(&self) -> usize {
-        self.z
-    }
-    pub fn cells(&self) -> &[Cell] {
-        &self.cells
-    }
-
     pub fn at(&self, x: usize, y: usize, z: usize) -> Cell {
         self.cells[z * (self.x * self.y) + y * self.x + x]
     }
@@ -68,7 +71,7 @@ impl Map {
         let cells = (0..x * y * z)
             .map(|_| match rng.gen::<u32>() % 4 {
                 //0 => Cell::None,
-                1 | 2 => Cell::Stone,
+                1 | 2 => Cell::Water,
                 //2 => Cell::Stone,
                 _ => Cell::Ground,
             })
@@ -106,7 +109,7 @@ impl Map {
             for pz in 0..z {
                 let cur = map.at(px, min_height, pz);
                 if let Cell::Grass = cur {
-                    *map.at_mut(px, min_height, pz) = Cell::Stone;
+                    *map.at_mut(px, min_height, pz) = Cell::Water;
                 }
             }
         }
@@ -124,5 +127,94 @@ impl Map {
             z: self.z,
             cells,
         }
+    }
+
+    pub fn simulate(&mut self, rng: &mut impl RandNalgebra) {
+        let mut new_map = Self {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            cells: vec![Cell::None; self.cells.len()],
+        };
+
+        // copy static cells
+        for x in 0..self.x {
+            for y in 0..self.y {
+                for z in 0..self.z {
+                    let cell = self.at(x, y, z);
+                    match cell {
+                        Cell::Water => {}
+                        _ => *new_map.at_mut(x, y, z) = cell,
+                    }
+                }
+            }
+        }
+
+        for x in 0..self.x {
+            for y in 0..self.y {
+                for z in 0..self.z {
+                    let cell = self.at(x, y, z);
+                    if let Cell::Water = cell {
+                        // this is last cell, discard the water
+                        if y == 0 {
+                        } else {
+                            let below = new_map.at(x, y - 1, z);
+                            if below.is_solid() {
+                                // this cell has hit ground
+                                // check if we can flow in some random direction
+                                let mut neighbour_coords = Vec::with_capacity(9);
+                                if x != 0 {
+                                    neighbour_coords.push((x - 1, y, z));
+                                    if z != 0 {
+                                        neighbour_coords.push((x - 1, y, z - 1));
+                                    }
+                                    if z != self.z - 1 {
+                                        neighbour_coords.push((x - 1, y, z + 1));
+                                    }
+                                }
+                                if x != self.x - 1 {
+                                    neighbour_coords.push((x + 1, y, z));
+                                    if z != 0 {
+                                        neighbour_coords.push((x + 1, y, z - 1));
+                                    }
+                                    if z != self.z - 1 {
+                                        neighbour_coords.push((x + 1, y, z + 1));
+                                    }
+                                }
+                                if z != 0 {
+                                    neighbour_coords.push((x, y, z - 1));
+                                }
+                                if z != self.z - 1 {
+                                    neighbour_coords.push((x, y, z + 1));
+                                }
+
+                                let neighbour_cells = neighbour_coords
+                                    .iter()
+                                    .cloned()
+                                    .map(|(x, y, z)| (new_map.at(x, y, z), (x, y, z)))
+                                    .filter(|(cell, _)| cell.is_solid())
+                                    .map(|(_, coord)| coord)
+                                    .collect::<Vec<(usize, usize, usize)>>();
+                                if let Some(new_coord) = neighbour_cells.choose(rng) {
+                                    // have some direction to flow
+                                    *new_map.at_mut(new_coord.0, new_coord.1, new_coord.2) =
+                                        Cell::Water;
+                                } else {
+                                    // if we have howhere to flow stay in this cell
+                                    *new_map.at_mut(x, y, z) = Cell::Water;
+                                }
+                            } else if below.is_water() {
+                                //
+                            } else {
+                                // in this case we have free space below us, just fall there
+                                *new_map.at_mut(x, y - 1, z) = Cell::Water;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        *self = new_map;
     }
 }

@@ -1781,6 +1781,7 @@ dependencies = [
  "num",
  "pollster",
  "rand",
+ "rand_core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

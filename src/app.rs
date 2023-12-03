@@ -1,10 +1,12 @@
 use crate::camera::Camera;
-use crate::map::{Cell, Map};
+use crate::map::Map;
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::MaterialDTO;
 use crate::renderer::{Renderer, WorldDTO};
+use crate::xorshift32::{self, Xorshift32, Xorshift32Seed};
+use rand::{thread_rng, SeedableRng};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -13,6 +15,7 @@ use winit::{
 use crate::input::Input;
 
 pub struct App {
+    rng: xorshift32::Xorshift32,
     input: Input,
     camera: Camera,
     materials: Vec<Material>,
@@ -61,8 +64,10 @@ impl App {
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
+        let rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
         let start_time = instant::Instant::now();
         Self {
+            rng,
             input,
             camera,
             materials,
@@ -167,6 +172,7 @@ impl App {
         //         });
         // };
 
+        self.map.simulate(&mut self.rng);
         match self.renderer.render() {
             Ok(_) => {}
             Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
