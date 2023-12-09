@@ -79,6 +79,14 @@ pub struct MapDTO<'a> {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SettingsDTO {
+    pub max_bounce_count: i32,
+    pub maximum_traversal_distance: i32,
+    pub reproject: f32,
+}
+
+#[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialDTO {
     pub albedo: Vector3,
@@ -92,6 +100,7 @@ pub struct WorldDTO<'a> {
     pub camera: CameraDTO,
     pub map: MapDTO<'a>,
     pub materials: &'a [MaterialDTO],
+    pub settings: SettingsDTO,
 }
 
 struct TargetTextures {
@@ -234,6 +243,7 @@ pub struct Renderer {
     target_textures: [TargetTextures; 2],
 
     prev_view_matrix: wgpu::Buffer,
+    settings_buffer: wgpu::Buffer,
 
     ray_tracing_bind_group: wgpu::BindGroup,
     targets_bind_groups: [wgpu::BindGroup; 2],
@@ -252,6 +262,7 @@ pub struct Renderer {
     should_update_last_view_matrix: bool,
 
     imgui: Imgui,
+    gauss_enabled: bool,
 }
 
 impl Renderer {
@@ -364,6 +375,11 @@ impl Renderer {
         let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("materials"),
             contents: bytemuck::cast_slice(&textures_vec),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let settings_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("settings"),
+            contents: bytemuck::bytes_of(&dto.settings),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let voxel_texture_size = wgpu::Extent3d {
@@ -520,6 +536,16 @@ impl Renderer {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -557,6 +583,10 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 7,
                     resource: material_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: settings_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -869,6 +899,7 @@ impl Renderer {
 
             target_textures,
             prev_view_matrix,
+            settings_buffer,
 
             ray_tracing_bind_group,
             targets_bind_groups,
@@ -887,6 +918,7 @@ impl Renderer {
             should_update_last_view_matrix: true,
 
             imgui,
+            gauss_enabled: true,
         }
     }
 
@@ -957,57 +989,56 @@ impl Renderer {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
         }
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("gauss vert render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.gauss_vert_texture_view,
-                    resolve_target: None,
-                    ops: Default::default(),
-                })],
-                depth_stencil_attachment: None,
-            });
+        if self.gauss_enabled {
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("gauss vert render pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.gauss_vert_texture_view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    })],
+                    depth_stencil_attachment: None,
+                });
 
-            render_pass.set_pipeline(&self.gauss_vert_pipeline);
-            render_pass.set_bind_group(
-                0,
-                &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
-                &[],
-            );
-            render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
-        }
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("gauss horiz render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: Default::default(),
-                })],
-                depth_stencil_attachment: None,
-            });
+                render_pass.set_pipeline(&self.gauss_vert_pipeline);
+                render_pass.set_bind_group(
+                    0,
+                    &self.present_tex_bind_groups[!self.targets_ping_pong as usize],
+                    &[],
+                );
+                render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+            }
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("gauss horiz render pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: Default::default(),
+                    })],
+                    depth_stencil_attachment: None,
+                });
 
-            render_pass.set_pipeline(&self.gauss_horiz_pipeline);
-            render_pass.set_bind_group(0, &self.gauss_vert_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+                render_pass.set_pipeline(&self.gauss_horiz_pipeline);
+                render_pass.set_bind_group(0, &self.gauss_vert_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
 
-            self.imgui
-                .renderer
-                .render(
-                    self.imgui.imgui.render(),
-                    &self.queue,
-                    &self.device,
-                    &mut render_pass,
-                )
-                .unwrap();
-        }
-
-        /*
-        {
+                self.imgui
+                    .renderer
+                    .render(
+                        self.imgui.imgui.render(),
+                        &self.queue,
+                        &self.device,
+                        &mut render_pass,
+                    )
+                    .unwrap();
+            }
+        } else {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1027,8 +1058,17 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+
+            self.imgui
+                .renderer
+                .render(
+                    self.imgui.imgui.render(),
+                    &self.queue,
+                    &self.device,
+                    &mut render_pass,
+                )
+                .unwrap();
         }
-        */
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -1099,6 +1139,10 @@ impl Renderer {
             self.voxel_texture_size,
         );
     }
+    pub fn update_settings(&mut self, settings: SettingsDTO) {
+        self.queue
+            .write_buffer(&self.settings_buffer, 0, bytemuck::bytes_of(&settings));
+    }
 
     pub fn get_frame(&mut self) -> &mut imgui::Ui {
         self.imgui.get_frame()
@@ -1108,6 +1152,17 @@ impl Renderer {
         self.imgui
             .platform
             .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
+    }
+
+    pub fn set_enable_gauss(&mut self, enabled: bool) {
+        self.gauss_enabled = enabled;
+    }
+
+    pub fn want_mouse_input(&self) -> bool {
+        self.imgui.imgui.io().want_capture_mouse
+    }
+    pub fn want_keyboard_input(&self) -> bool {
+        self.imgui.imgui.io().want_capture_keyboard
     }
 }
 

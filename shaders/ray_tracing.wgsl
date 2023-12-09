@@ -6,8 +6,12 @@ const MAT_METAL: i32 = 1;
 const MAT_DIELECTRIC: i32 = 2;
 
 const VOXEL_SIZE: f32 = 0.5;
-const MAXIMUM_TRAVERSAL_DISTANCE: i32 = 64;
-const MAX_BOUNCE_COUNT: i32 = 3;
+
+struct Settings {
+    max_bounce_count: i32,
+    maximum_traversal_distance: i32,
+    reproject: f32
+};
 
 struct Onb {
     u: vec3f, 
@@ -81,6 +85,7 @@ struct RandomSeed {
 @group(0) @binding(5) var prev_tex_sampler: sampler;
 @group(0) @binding(6) var<uniform> prev_view_matrix: mat4x4f;
 @group(0) @binding(7) var<uniform> materials: array<Material, 256>;
+@group(0) @binding(8) var<uniform> settings: Settings;
 
 @group(1) @binding(0) var prev_color_tex: texture_2d<f32>;
 @group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
@@ -211,7 +216,7 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
     let t_delta = VOXEL_SIZE / direction * step;
 
     var original_id = textureLoad(voxel_data, current_voxel, 0).r;
-    for (var i: i32 = 0; i < MAXIMUM_TRAVERSAL_DISTANCE; i += 1) {
+    for (var i: i32 = 0; i < settings.maximum_traversal_distance; i += 1) {
         if t_max.x < t_max.y && t_max.x < t_max.z {
             record.offset_id = current_voxel.x;
             record.t = t_max.x;
@@ -318,7 +323,7 @@ fn trace(ray_: Ray) -> TraceResult {
     result.offset_id = hrec.offset_id;
 
     var i: i32 = 1;
-    for (; i < MAX_BOUNCE_COUNT; i += 1) {
+    for (; i < settings.max_bounce_count; i += 1) {
         let hrec = voxel_traverse(ray);
         if hrec.id == 0u {
             break;
@@ -368,7 +373,8 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
        result.offset_id == prev_offset_id
     {
         let alpha = (1.0 / 10.0);
-        result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
+        let new_color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
+        result.color = settings.reproject * new_color + (1.0 - settings.reproject) * result.color;
     }
 
     return result;

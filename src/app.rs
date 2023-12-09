@@ -3,7 +3,7 @@ use crate::map::{Cell, Map};
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
-use crate::renderer::MaterialDTO;
+use crate::renderer::{MaterialDTO, SettingsDTO};
 use crate::renderer::{Renderer, WorldDTO};
 use crate::xorshift32::{self, Xorshift32, Xorshift32Seed};
 use rand::SeedableRng;
@@ -14,7 +14,36 @@ use winit::{
 
 use crate::input::Input;
 
+struct Settings {
+    max_bounce_count: i32,
+    maximum_traversal_distance: i32,
+    enable_reproject: bool,
+    enable_gauss: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            max_bounce_count: 4,
+            maximum_traversal_distance: 64,
+            enable_reproject: true,
+            enable_gauss: true,
+        }
+    }
+}
+
+impl Settings {
+    fn as_dto(&self) -> SettingsDTO {
+        SettingsDTO {
+            max_bounce_count: self.max_bounce_count,
+            maximum_traversal_distance: self.maximum_traversal_distance,
+            reproject: if self.enable_reproject { 1.0 } else { 0.0 },
+        }
+    }
+}
+
 pub struct App {
+    settings: Settings,
     rng: xorshift32::Xorshift32,
     input: Input,
     camera: Camera,
@@ -31,6 +60,7 @@ impl App {
         let window_size = window.inner_size();
         let aspect_ratio = (window_size.width as f32) / (window_size.height as f32);
 
+        let settings = Settings::default();
         let mut camera = Camera::new(aspect_ratio, 60.0_f32.to_radians(), 0.1, 1000.0);
         camera.translate(Vector3::new(10.0, 10.0, 10.0) * 1.5);
 
@@ -61,12 +91,14 @@ impl App {
             camera: camera.as_dto(),
             map: map.as_dto(),
             materials: &material_dto,
+            settings: settings.as_dto(),
         };
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
         let start_time = instant::Instant::now();
         Self {
+            settings,
             rng,
             input,
             camera,
@@ -92,7 +124,9 @@ impl App {
                 self.input.handle_key_event(*key_ev);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                self.input.handle_mouse_button(*state, *button);
+                if !self.renderer.want_mouse_input() {
+                    self.input.handle_mouse_button(*state, *button);
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.input.handle_mouse_move(*position);
@@ -151,25 +185,54 @@ impl App {
             camera_was_changed = true;
         }
 
-        self.renderer
-            .update_camera(&self.camera.as_dto(), camera_was_changed);
-
         {
-            let ui = self.renderer.get_frame();
+            let ui = unsafe {
+                std::mem::transmute::<&mut imgui::Ui, &'static mut imgui::Ui>(
+                    self.renderer.get_frame(),
+                )
+            };
+            let renderer = &mut self.renderer;
             let window = ui.window("Hello world");
             window
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                .size([400.0, 400.0], imgui::Condition::FirstUseEver)
+                .position([0.0, 0.0], imgui::Condition::FirstUseEver)
                 .build(|| {
-                    ui.text("Hello world!");
-                    ui.text("This...is...imgui-rs on WGPU!");
-                    ui.separator();
-                    let mouse_pos = ui.io().mouse_pos;
-                    ui.text(format!(
-                        "Mouse Position: ({:.1},{:.1})",
-                        mouse_pos[0], mouse_pos[1]
-                    ));
+                    let mut was_changed = false;
+                    ui.text(format!("Frame time: {:?}", time_delta));
+                    if ui.checkbox("Enable reproject", &mut self.settings.enable_reproject) {
+                        was_changed = true;
+                    }
+                    if ui.checkbox("Enable gauss", &mut self.settings.enable_gauss) {
+                        renderer.set_enable_gauss(self.settings.enable_gauss);
+                        was_changed = true;
+                    }
+                    if imgui::Drag::new("camera positon")
+                        .build_array(ui, &mut self.camera.position_as_slice())
+                    {
+                        self.camera.update_view_matrix();
+                        camera_was_changed = true;
+                    }
+                    let mut pitch = self.camera.pitch_mut().to_degrees();
+                    if imgui::Drag::new("camera pitch").build(ui, &mut pitch) {
+                        *self.camera.pitch_mut() = pitch.to_radians();
+                        self.camera.update_view_matrix();
+                        camera_was_changed = true;
+                    }
+                    let mut yaw = self.camera.yaw_mut().to_degrees();
+                    if imgui::Drag::new("camera yaw").build(ui, &mut yaw) {
+                        *self.camera.yaw_mut() = yaw.to_radians();
+                        self.camera.update_view_matrix();
+                        camera_was_changed = true;
+                    }
+
+                    if was_changed {
+                        renderer.update_settings(self.settings.as_dto());
+                    }
                 });
         };
+
+        self.renderer
+            .update_camera(&self.camera.as_dto(), camera_was_changed);
 
         match self.renderer.render() {
             Ok(_) => {}

@@ -36,6 +36,17 @@ impl Camera {
         }
     }
 
+    pub fn pitch_mut(&mut self) -> &mut f32 {
+        &mut self.pitch
+    }
+    pub fn yaw_mut(&mut self) -> &mut f32 {
+        &mut self.yaw
+    }
+
+    pub fn position_as_slice(&mut self) -> &mut [f32] {
+        self.position.as_mut_slice()
+    }
+
     pub fn rotate(&mut self, yaw_d: f32, pitch_d: f32) {
         self.pitch += pitch_d;
         self.yaw += yaw_d;
@@ -48,7 +59,7 @@ impl Camera {
         self.update_view_matrix();
     }
 
-    fn update_view_matrix(&mut self) {
+    pub fn update_view_matrix(&mut self) {
         let rotation = Matrix4::from_euler_angles(self.yaw, self.pitch, 0.0);
         self.view_matrix = Matrix4::new_translation(&self.position) * rotation;
     }
