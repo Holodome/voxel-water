@@ -19,8 +19,3 @@ fn random_f32() -> f32 {
     let u = random_u32();
     return f32(u) * bitcast<f32>(0x2F800000u);
 }
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    rng_state = xorshift32(bitcast<u32>(in.uv.x * 123456789.0 + in.uv.y) ^ random_seed);
-    ...
