@@ -54,6 +54,8 @@ pub struct WaterSim {
     mass: Vec<f32>,
     new_mass: Vec<f32>,
     cells: Vec<Cell>,
+
+    water_height: usize,
 }
 
 impl WaterSim {
@@ -69,6 +71,7 @@ impl WaterSim {
         let mut new_cells = vec![Cell::None; x * y * z];
         let mut mass = vec![0.0; x * y * z];
         let new_mass = vec![0.0; x * y * z];
+        let mut water_height = 0;
         for xi in 0..map.x {
             for yi in 0..map.y {
                 for zi in 0..map.z {
@@ -76,6 +79,7 @@ impl WaterSim {
                     new_cells[(zi + 1) * (x * y) + (yi + 1) * x + (xi + 1)] = c;
                     if c.is_water() {
                         mass[(zi + 1) * (x * y) + (yi + 1) * x + (xi + 1)] = max_mass;
+                        water_height = yi + 1;
                     }
                 }
             }
@@ -95,6 +99,7 @@ impl WaterSim {
             mass,
             new_mass,
             cells,
+            water_height,
         }
     }
 
@@ -156,7 +161,7 @@ impl WaterSim {
                     if !self.cells[self.index(x, y - 1, z)].is_solid() {
                         let mut flow = self.get_stable_state_b(
                             remaining_mass + self.mass[self.index(x, y - 1, z)],
-                        );
+                        ) - self.mass[self.index(x, y - 1, z)];
                         if flow > self.min_flow {
                             flow *= 0.5;
                         }
@@ -174,7 +179,7 @@ impl WaterSim {
                     }
 
                     // left
-                    if !self.cells[self.index(x - 1, y, z)].is_solid() {
+                    if x - 1 != 0 && !self.cells[self.index(x - 1, y, z)].is_solid() {
                         let mut flow = (self.mass[self.index(x, y, z)]
                             - self.mass[self.index(x - 1, y, z)])
                             / 4.0;
@@ -194,7 +199,7 @@ impl WaterSim {
                         continue;
                     }
                     // right
-                    if !self.cells[self.index(x + 1, y, z)].is_solid() {
+                    if x + 1 != self.x && !self.cells[self.index(x + 1, y, z)].is_solid() {
                         let mut flow = (self.mass[self.index(x, y, z)]
                             - self.mass[self.index(x + 1, y, z)])
                             / 4.0;
@@ -214,7 +219,7 @@ impl WaterSim {
                         continue;
                     }
                     // up
-                    if !self.cells[self.index(x, y, z - 1)].is_solid() {
+                    if z - 1 != 0 && !self.cells[self.index(x, y, z - 1)].is_solid() {
                         let mut flow = (self.mass[self.index(x, y, z)]
                             - self.mass[self.index(x, y, z - 1)])
                             / 4.0;
@@ -234,7 +239,7 @@ impl WaterSim {
                         continue;
                     }
                     // down
-                    if !self.cells[self.index(x, y, z + 1)].is_solid() {
+                    if z + 1 != self.z && !self.cells[self.index(x, y, z + 1)].is_solid() {
                         let mut flow = (self.mass[self.index(x, y, z)]
                             - self.mass[self.index(x, y, z + 1)])
                             / 4.0;
@@ -289,6 +294,16 @@ impl WaterSim {
                     } else {
                         self.cells[i] = Cell::None;
                     }
+                }
+            }
+        }
+
+        for x in 1..self.x - 1 {
+            for z in 1..self.z - 1 {
+                let i = self.index(x, self.water_height, z);
+                if self.cells[i].is_air() {
+                    self.cells[i] = Cell::Water;
+                    self.mass[i] = self.max_mass;
                 }
             }
         }

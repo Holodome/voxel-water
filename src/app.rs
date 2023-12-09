@@ -142,7 +142,6 @@ impl App {
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
         self.frame_counter += 1;
         if self.frame_counter % 20 == 0 && self.sim_enabled {
-            // self.map.set_mass(20, 19, 20);
             self.map.simulate();
             self.renderer.update_map(self.map.as_dto());
         }
