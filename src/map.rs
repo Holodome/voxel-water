@@ -103,6 +103,10 @@ impl WaterSim {
         }
     }
 
+    pub fn y(&self) -> usize {
+        self.y
+    }
+
     pub fn at(&self, x: usize, y: usize, z: usize) -> Cell {
         self.cells[z * (self.x * self.y) + y * self.x + x]
     }
@@ -145,7 +149,7 @@ impl WaterSim {
         }
     }
 
-    pub fn simulate(&mut self) {
+    pub fn simulate(&mut self) -> bool {
         for x in 1..self.x - 1 {
             for z in 1..self.z - 1 {
                 for y in 1..self.y - 1 {
@@ -280,6 +284,7 @@ impl WaterSim {
             }
         }
 
+        let mut changed = false;
         self.mass = self.new_mass.clone();
         for x in 1..self.x - 1 {
             for z in 1..self.z - 1 {
@@ -290,8 +295,10 @@ impl WaterSim {
                     }
 
                     if self.mass[i] > self.min_mass {
+                        changed = true;
                         self.cells[i] = Cell::Water;
                     } else {
+                        changed = true;
                         self.cells[i] = Cell::None;
                     }
                 }
@@ -324,6 +331,8 @@ impl WaterSim {
                 }
             }
         }
+
+        changed
     }
 }
 

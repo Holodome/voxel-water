@@ -55,6 +55,9 @@ pub struct App {
     last_time: instant::Instant,
     frame_counter: usize,
     sim_enabled: bool,
+
+    water_source_coord: [usize; 3],
+    source_enabled: bool,
 }
 
 impl App {
@@ -112,6 +115,8 @@ impl App {
             last_time: start_time,
             frame_counter: 0,
             sim_enabled: false,
+            water_source_coord: [20, 19, 20],
+            source_enabled: false,
         }
     }
 
@@ -142,8 +147,16 @@ impl App {
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
         self.frame_counter += 1;
         if self.frame_counter % 20 == 0 && self.sim_enabled {
-            self.map.simulate();
-            self.renderer.update_map(self.map.as_dto());
+            if self.source_enabled {
+                self.map.set_mass(
+                    self.water_source_coord[0],
+                    self.water_source_coord[1],
+                    self.water_source_coord[2],
+                );
+            }
+            if self.map.simulate() {
+                self.renderer.update_map(self.map.as_dto());
+            }
         }
 
         let new_time = instant::Instant::now();
@@ -217,9 +230,11 @@ impl App {
                     if ui.checkbox("Enable reproject", &mut self.settings.enable_reproject) {
                         was_changed = true;
                     }
+                    if was_changed {
+                        renderer.update_settings(self.settings.as_dto());
+                    }
                     if ui.checkbox("Enable gauss", &mut self.settings.enable_gauss) {
                         renderer.set_enable_gauss(self.settings.enable_gauss);
-                        was_changed = true;
                     }
                     if imgui::Drag::new("camera positon")
                         .build_array(ui, &mut self.camera.position_as_slice())
@@ -255,6 +270,39 @@ impl App {
                         }
                         _ => {}
                     }
+                    imgui::Drag::new("water source coord")
+                        .range(0, self.map.y())
+                        .build_array(ui, &mut self.water_source_coord);
+                    ui.checkbox("water source enable", &mut self.source_enabled);
+                    if ui.button("reset scene") {
+                        let mut rng =
+                            Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
+                        let mut perlin = Perlin::new(&mut rng);
+                        let map = Map::with_perlin(40, 20, 40, &mut perlin);
+                        let map = WaterSim::new(map);
+                        self.map = map;
+
+                        let materials = vec![
+                            Material::diffuse(Vector3::new(0.0, 0.0, 0.0)),
+                            Material::diffuse(Vector3::new(
+                                0.44313725490196076,
+                                0.6666666666666666,
+                                0.20392156862745098,
+                            )),
+                            Material::dielectric(Vector3::new(0.5, 0.5, 0.9), 2.045),
+                            Material::metal(
+                                Vector3::new(
+                                    0.6274509803921569,
+                                    0.3568627450980392,
+                                    0.3254901960784314,
+                                ),
+                                0.5,
+                            ),
+                        ];
+                        self.materials = materials;
+                        renderer.update_map(self.map.as_dto());
+                        materials_changed = true;
+                    }
                     if materials_changed {
                         let material_dto = self
                             .materials
@@ -262,10 +310,6 @@ impl App {
                             .map(|it| it.as_dto())
                             .collect::<Vec<MaterialDTO>>();
                         renderer.update_materials(&material_dto);
-                    }
-
-                    if was_changed {
-                        renderer.update_settings(self.settings.as_dto());
                     }
                 });
         };
