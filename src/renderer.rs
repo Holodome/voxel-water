@@ -244,6 +244,7 @@ pub struct Renderer {
 
     prev_view_matrix: wgpu::Buffer,
     settings_buffer: wgpu::Buffer,
+    material_buffer: wgpu::Buffer,
 
     ray_tracing_bind_group: wgpu::BindGroup,
     targets_bind_groups: [wgpu::BindGroup; 2],
@@ -900,6 +901,7 @@ impl Renderer {
             target_textures,
             prev_view_matrix,
             settings_buffer,
+            material_buffer,
 
             ray_tracing_bind_group,
             targets_bind_groups,
@@ -1163,6 +1165,28 @@ impl Renderer {
     }
     pub fn want_keyboard_input(&self) -> bool {
         self.imgui.imgui.io().want_capture_keyboard
+    }
+
+    pub fn update_materials(&mut self, materials: &[MaterialDTO]) {
+        let textures_vec = {
+            let mut v = Vec::<MaterialDTO>::with_capacity(256);
+            v.resize_with(256, || MaterialDTO {
+                albedo: Vector3::zeros(),
+                fuzz: 0.0,
+                refractive_index: 0.0,
+                kind: 0,
+            });
+            for (i, it) in materials.iter().enumerate() {
+                v[i] = it.clone();
+            }
+
+            v
+        };
+        self.queue.write_buffer(
+            &self.material_buffer,
+            0,
+            bytemuck::cast_slice(&textures_vec),
+        );
     }
 }
 

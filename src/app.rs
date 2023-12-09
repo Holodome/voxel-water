@@ -1,5 +1,5 @@
 use crate::camera::Camera;
-use crate::map::{Cell, Map};
+use crate::map::{Cell, Map, WaterSim};
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
@@ -48,11 +48,13 @@ pub struct App {
     input: Input,
     camera: Camera,
     materials: Vec<Material>,
-    map: Map,
+    // map: Map,
+    map: WaterSim,
     renderer: Renderer,
     start_time: instant::Instant,
     last_time: instant::Instant,
     frame_counter: usize,
+    sim_enabled: bool,
 }
 
 impl App {
@@ -67,6 +69,7 @@ impl App {
         let mut rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
         let mut perlin = Perlin::new(&mut rng);
         let map = Map::with_perlin(40, 20, 40, &mut perlin);
+        let map = WaterSim::new(map);
         // let map = Map::random(10, 10, 10);
         // let map = Map::cube(10, 10, 10);
 
@@ -108,6 +111,7 @@ impl App {
             start_time,
             last_time: start_time,
             frame_counter: 0,
+            sim_enabled: false,
         }
     }
 
@@ -137,11 +141,10 @@ impl App {
 
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
         self.frame_counter += 1;
-        if self.frame_counter % 2 == 0 {
-            // *self.map.at_mut(20, 19, 20) = Cell::Water;
-
-            // self.map.simulate(&mut self.rng);
-            // self.renderer.update_map(self.map.as_dto());
+        if self.frame_counter % 20 == 0 && self.sim_enabled {
+            // self.map.set_mass(20, 19, 20);
+            self.map.simulate();
+            self.renderer.update_map(self.map.as_dto());
         }
 
         let new_time = instant::Instant::now();
@@ -192,13 +195,26 @@ impl App {
                 )
             };
             let renderer = &mut self.renderer;
-            let window = ui.window("Hello world");
+            let window = ui.window("Settings");
             window
                 .size([400.0, 400.0], imgui::Condition::FirstUseEver)
                 .position([0.0, 0.0], imgui::Condition::FirstUseEver)
                 .build(|| {
                     let mut was_changed = false;
                     ui.text(format!("Frame time: {:?}", time_delta));
+                    ui.checkbox("sim", &mut self.sim_enabled);
+                    if imgui::Drag::new("bounce count")
+                        .range(0, 128)
+                        .build(ui, &mut self.settings.max_bounce_count)
+                    {
+                        was_changed = true;
+                    }
+                    if imgui::Drag::new("max distance")
+                        .range(0, 128)
+                        .build(ui, &mut self.settings.maximum_traversal_distance)
+                    {
+                        was_changed = true;
+                    }
                     if ui.checkbox("Enable reproject", &mut self.settings.enable_reproject) {
                         was_changed = true;
                     }
@@ -223,6 +239,30 @@ impl App {
                         *self.camera.yaw_mut() = yaw.to_radians();
                         self.camera.update_view_matrix();
                         camera_was_changed = true;
+                    }
+
+                    let mut materials_changed = false;
+                    match &mut self.materials[2] {
+                        Material::Dielectric {
+                            albedo,
+                            refractive_index,
+                        } => {
+                            materials_changed |= ui
+                                .slider_config("water color", 0.0, 1.0)
+                                .build_array(&mut albedo.as_mut_slice());
+                            materials_changed |= imgui::Drag::new("water ior")
+                                .speed(0.05)
+                                .build(ui, refractive_index);
+                        }
+                        _ => {}
+                    }
+                    if materials_changed {
+                        let material_dto = self
+                            .materials
+                            .iter()
+                            .map(|it| it.as_dto())
+                            .collect::<Vec<MaterialDTO>>();
+                        renderer.update_materials(&material_dto);
                     }
 
                     if was_changed {
