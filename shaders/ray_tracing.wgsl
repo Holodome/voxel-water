@@ -31,7 +31,6 @@ struct FragmentOutput {
     @location(1) normal: vec4f,
     @location(2) material_id: f32,
     @location(3) offset_id: f32,
-    @location(4) cache_tail: f32
 };
 
 struct TraceResult {
@@ -88,7 +87,6 @@ struct RandomSeed {
 @group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
 @group(1) @binding(2) var prev_mat_tex: texture_2d<f32>;
 @group(1) @binding(3) var prev_offset_tex: texture_2d<f32>;
-@group(1) @binding(4) var prev_cache_tail_tex: texture_2d<f32>;
 
 var<private> rng_state: u32;
 var<private> is_in_water: bool = false;
@@ -212,10 +210,9 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
 
     var t_max = (next_bound - origin) / direction;
     let t_delta = VOXEL_SIZE / direction * step;
-    var i: i32 = 0;
 
     var original_id = textureLoad(voxel_data, current_voxel, 0).r;
-    loop {
+    for (var i: i32 = 0; i < MAXIMUM_TRAVERSAL_DISTANCE; i += 1) {
         if t_max.x < t_max.y && t_max.x < t_max.z {
             record.offset_id = current_voxel.x;
             record.t = t_max.x;
@@ -254,11 +251,6 @@ fn voxel_traverse(ray: Ray) -> HitRecord {
             }
         }
         original_id = record.id;
-
-        i += 1;
-        if i >= MAXIMUM_TRAVERSAL_DISTANCE {
-            break;
-        }
     }
 
     return record;
@@ -367,23 +359,17 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
     let prev_normal = textureSample(prev_normal_tex, prev_tex_sampler, prev_uv).rgb;
     let prev_offset_id = textureSample(prev_offset_tex, prev_tex_sampler, prev_uv).r;
     let prev_mat_id = textureSample(prev_mat_tex, prev_tex_sampler, prev_uv).r;
-    let prev_cache_tail = textureSample(prev_cache_tail_tex, prev_tex_sampler, prev_uv).r;
     let prev_color = textureSample(prev_color_tex, prev_tex_sampler, prev_uv).rgb;
     
-    if result.material_id != 0.0 {
-        if prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
-            prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
-            result.material_id == prev_mat_id && 
-            distance(result.normal.xyz, prev_normal) < 0.1 && 
-            result.offset_id == prev_offset_id
-        {
-            let alpha = (1.0 / 10.0) * reproject;
-            result.cache_tail = (1.0 - alpha) * prev_cache_tail;
-            result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
-        } else {
-            // missed the cache
-            result.cache_tail = 1.0;
-        }
+    if result.material_id != 0.0 &&
+       prev_uv.x > 0.0 && prev_uv.x < 1.0 &&
+       prev_uv.y > 0.0 && prev_uv.y < 1.0 &&
+       result.material_id == prev_mat_id && 
+       distance(result.normal.xyz, prev_normal) < 0.1 && 
+       result.offset_id == prev_offset_id
+    {
+        let alpha = (1.0 / 10.0) * reproject;
+        result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
     }
 
     return result;
