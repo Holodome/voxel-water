@@ -14,7 +14,7 @@ impl rand::RngCore for Xorshift32 {
     }
 
     fn next_u64(&mut self) -> u64 {
-        rand_core::impls::next_u64_via_fill(self)
+        rand_core::impls::next_u64_via_u32(self)
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {

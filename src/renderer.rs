@@ -99,13 +99,11 @@ struct TargetTextures {
     prev_normal_texture: wgpu::Texture,
     prev_mat_texture: wgpu::Texture,
     prev_offset_texture: wgpu::Texture,
-    prev_cache_tail_texture: wgpu::Texture,
 
     prev_color_texture_view: wgpu::TextureView,
     prev_normal_texture_view: wgpu::TextureView,
     prev_mat_texture_view: wgpu::TextureView,
     prev_offset_texture_view: wgpu::TextureView,
-    prev_cache_tail_texture_view: wgpu::TextureView,
 }
 
 impl TargetTextures {
@@ -162,31 +160,16 @@ impl TargetTextures {
             view_formats: &[],
         });
         let prev_offset_texture_view = prev_offset_texture.create_view(&Default::default());
-        let prev_cache_tail_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: prev_texture_size.clone(),
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            label: Some("prev cache tail texture"),
-            view_formats: &[],
-        });
-        let prev_cache_tail_texture_view = prev_cache_tail_texture.create_view(&Default::default());
         Self {
             prev_color_texture,
             prev_normal_texture,
             prev_mat_texture,
             prev_offset_texture,
-            prev_cache_tail_texture,
 
             prev_color_texture_view,
             prev_normal_texture_view,
             prev_mat_texture_view,
             prev_offset_texture_view,
-            prev_cache_tail_texture_view,
         }
     }
 
@@ -210,12 +193,6 @@ impl TargetTextures {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(&self.prev_offset_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.prev_cache_tail_texture_view,
-                    ),
                 },
             ],
         })
@@ -648,16 +625,6 @@ impl Renderer {
                         },
                         count: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
                 ],
             });
         let targets_bind_groups = [
@@ -891,11 +858,6 @@ impl Renderer {
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     }),
-                    Some(wgpu::ColorTargetState {
-                        format: wgpu::TextureFormat::R32Float,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    }),
                 ],
             }),
             multiview: None,
@@ -1000,12 +962,6 @@ impl Renderer {
                     Some(wgpu::RenderPassColorAttachment {
                         view: &self.target_textures[self.targets_ping_pong as usize]
                             .prev_offset_texture_view,
-                        resolve_target: None,
-                        ops: Default::default(),
-                    }),
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: &self.target_textures[self.targets_ping_pong as usize]
-                            .prev_cache_tail_texture_view,
                         resolve_target: None,
                         ops: Default::default(),
                     }),

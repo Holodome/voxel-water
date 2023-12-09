@@ -36,10 +36,8 @@ impl Cell {
     }
     fn is_solid(&self) -> bool {
         match self {
-            Self::None => false,
-            Self::Grass => true,
-            Self::Water => false,
-            Self::Ground => false,
+            Self::Grass | Self::Ground => true,
+            _ => false,
         }
     }
 }
@@ -191,9 +189,7 @@ impl Map {
                                 let neighbour_cells = neighbour_coords
                                     .iter()
                                     .cloned()
-                                    .map(|(x, y, z)| (new_map.at(x, y, z), (x, y, z)))
-                                    .filter(|(cell, _)| cell.is_solid())
-                                    .map(|(_, coord)| coord)
+                                    .filter(|(x, y, z)| new_map.at(*x, *y, *z).is_air())
                                     .collect::<Vec<(usize, usize, usize)>>();
                                 if let Some(new_coord) = neighbour_cells.choose(rng) {
                                     // have some direction to flow

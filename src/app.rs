@@ -1,12 +1,12 @@
 use crate::camera::Camera;
-use crate::map::Map;
+use crate::map::{Cell, Map};
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::MaterialDTO;
 use crate::renderer::{Renderer, WorldDTO};
 use crate::xorshift32::{self, Xorshift32, Xorshift32Seed};
-use rand::{thread_rng, SeedableRng};
+use rand::SeedableRng;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -23,6 +23,7 @@ pub struct App {
     renderer: Renderer,
     start_time: instant::Instant,
     last_time: instant::Instant,
+    frame_counter: usize,
 }
 
 impl App {
@@ -33,7 +34,7 @@ impl App {
         let mut camera = Camera::new(aspect_ratio, 60.0_f32.to_radians(), 0.1, 1000.0);
         camera.translate(Vector3::new(10.0, 10.0, 10.0) * 1.5);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
         let mut perlin = Perlin::new(&mut rng);
         let map = Map::with_perlin(40, 20, 40, &mut perlin);
         // let map = Map::random(10, 10, 10);
@@ -64,7 +65,6 @@ impl App {
         let renderer = Renderer::new(window, &dto).await;
         let input = Input::default();
 
-        let rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
         let start_time = instant::Instant::now();
         Self {
             rng,
@@ -75,6 +75,7 @@ impl App {
             renderer,
             start_time,
             last_time: start_time,
+            frame_counter: 0,
         }
     }
 
@@ -101,6 +102,14 @@ impl App {
     }
 
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
+        self.frame_counter += 1;
+        if self.frame_counter % 2 == 0 {
+            // *self.map.at_mut(20, 19, 20) = Cell::Water;
+
+            // self.map.simulate(&mut self.rng);
+            // self.renderer.update_map(self.map.as_dto());
+        }
+
         let new_time = instant::Instant::now();
         let time_delta = new_time.duration_since(self.last_time);
         self.last_time = new_time;
@@ -160,17 +169,8 @@ impl App {
                         mouse_pos[0], mouse_pos[1]
                     ));
                 });
-
-            let window = ui.window("Hello too");
-            window
-                .size([400.0, 200.0], imgui::Condition::FirstUseEver)
-                .position([400.0, 200.0], imgui::Condition::FirstUseEver)
-                .build(|| {
-                    ui.text(format!("Frametime: {time_delta:?}"));
-                });
         };
 
-        self.map.simulate(&mut self.rng);
         match self.renderer.render() {
             Ok(_) => {}
             Err(wgpu::SurfaceError::Lost) => self.renderer.handle_lost_frame(),
