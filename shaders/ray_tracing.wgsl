@@ -80,8 +80,7 @@ struct RandomSeed {
 
 @group(0) @binding(5) var prev_tex_sampler: sampler;
 @group(0) @binding(6) var<uniform> prev_view_matrix: mat4x4f;
-@group(0) @binding(7) var<uniform> reproject: f32;
-@group(0) @binding(8) var<uniform> materials: array<Material, 256>;
+@group(0) @binding(7) var<uniform> materials: array<Material, 256>;
 
 @group(1) @binding(0) var prev_color_tex: texture_2d<f32>;
 @group(1) @binding(1) var prev_normal_tex: texture_2d<f32>;
@@ -368,7 +367,7 @@ fn temporal_reverse_reprojection(fs: TraceResult, uv: vec2f) -> FragmentOutput {
        distance(result.normal.xyz, prev_normal) < 0.1 && 
        result.offset_id == prev_offset_id
     {
-        let alpha = (1.0 / 10.0) * reproject;
+        let alpha = (1.0 / 10.0);
         result.color = vec4f((alpha * result.color.xyz) + (1.0 - alpha) * prev_color, 1.0);
     }
 

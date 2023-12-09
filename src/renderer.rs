@@ -234,7 +234,6 @@ pub struct Renderer {
     target_textures: [TargetTextures; 2],
 
     prev_view_matrix: wgpu::Buffer,
-    reproject: wgpu::Buffer,
 
     ray_tracing_bind_group: wgpu::BindGroup,
     targets_bind_groups: [wgpu::BindGroup; 2],
@@ -421,12 +420,6 @@ impl Renderer {
             contents: bytemuck::bytes_of(&dto.camera.view_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let reproject_value = 1.0f32;
-        let reproject = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("reproject"),
-            contents: bytemuck::bytes_of(&reproject_value),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
         let texture_size_v = Vector2::new(size.width as f32, size.height as f32);
         let texture_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("texture size"),
@@ -527,16 +520,6 @@ impl Renderer {
                         },
                         count: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 8,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                 ],
             });
         let ray_tracing_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -573,10 +556,6 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
-                    resource: reproject.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
                     resource: material_buffer.as_entire_binding(),
                 },
             ],
@@ -890,7 +869,6 @@ impl Renderer {
 
             target_textures,
             prev_view_matrix,
-            reproject,
 
             ray_tracing_bind_group,
             targets_bind_groups,
