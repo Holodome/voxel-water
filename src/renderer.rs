@@ -2,66 +2,9 @@ use crate::math::*;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-struct Imgui {
-    pub imgui: imgui::Context,
-    platform: imgui_winit_support::WinitPlatform,
-    renderer: imgui_wgpu::Renderer,
-}
-
-impl Imgui {
-    fn new(
-        window: &winit::window::Window,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_format: wgpu::TextureFormat,
-    ) -> Self {
-        let hidpi_factor = window.scale_factor();
-        let mut imgui = imgui::Context::create();
-        let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
-        platform.attach_window(
-            imgui.io_mut(),
-            &window,
-            imgui_winit_support::HiDpiMode::Default,
-        );
-        imgui.set_ini_filename(None);
-        let font_size = (13.0 * hidpi_factor) as f32;
-        imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
-
-        imgui
-            .fonts()
-            .add_font(&[imgui::FontSource::DefaultFontData {
-                config: Some(imgui::FontConfig {
-                    oversample_h: 1,
-                    pixel_snap_h: true,
-                    size_pixels: font_size,
-                    ..Default::default()
-                }),
-            }]);
-
-        let renderer = imgui_wgpu::Renderer::new(
-            &mut imgui,
-            device,
-            queue,
-            imgui_wgpu::RendererConfig {
-                texture_format,
-                ..Default::default()
-            },
-        );
-        Self {
-            imgui,
-            platform,
-            renderer,
-        }
-    }
-
-    fn update_time(&mut self, delta: std::time::Duration) {
-        self.imgui.io_mut().update_delta_time(delta);
-    }
-
-    fn get_frame(&mut self) -> &mut imgui::Ui {
-        self.imgui.frame()
-    }
-}
+use egui::FontDefinitions;
+use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+use egui_winit_platform::{Platform, PlatformDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct CameraDTO {
@@ -262,7 +205,8 @@ pub struct Renderer {
     last_view_matrix: Matrix4,
     should_update_last_view_matrix: bool,
 
-    imgui: Imgui,
+    egui_platform: Platform,
+    egui_render_pass: RenderPass,
     gauss_enabled: bool,
 }
 
@@ -879,7 +823,14 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let imgui = Imgui::new(&window, &device, &queue, config.format);
+        let egui_platform = Platform::new(PlatformDescriptor {
+            physical_width: size.width as u32,
+            physical_height: size.height as u32,
+            scale_factor: window.scale_factor(),
+            font_definitions: FontDefinitions::default(),
+            style: Default::default(),
+        });
+        let egui_render_pass = RenderPass::new(&device, surface_format, 1);
 
         Self {
             window,
@@ -919,7 +870,8 @@ impl Renderer {
             last_view_matrix: dto.camera.view_matrix.try_inverse().unwrap(),
             should_update_last_view_matrix: true,
 
-            imgui,
+            egui_platform,
+            egui_render_pass,
             gauss_enabled: true,
         }
     }
@@ -1029,16 +981,6 @@ impl Renderer {
                 render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
-
-                self.imgui
-                    .renderer
-                    .render(
-                        self.imgui.imgui.render(),
-                        &self.queue,
-                        &self.device,
-                        &mut render_pass,
-                    )
-                    .unwrap();
             }
         } else {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1060,15 +1002,30 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.present_sampl_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..DISPLAY_VERTICES.len() as u32, 0..1);
+        }
 
-            self.imgui
-                .renderer
-                .render(
-                    self.imgui.imgui.render(),
-                    &self.queue,
-                    &self.device,
-                    &mut render_pass,
-                )
+        {
+            let full_output = self.egui_platform.end_frame(Some(&self.window));
+            let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);
+            let screen_descriptor = ScreenDescriptor {
+                physical_width: self.config.width,
+                physical_height: self.config.height,
+                scale_factor: self.window.scale_factor() as f32,
+            };
+            let tdelta: egui::TexturesDelta = full_output.textures_delta;
+            self.egui_render_pass
+                .add_textures(&self.device, &self.queue, &tdelta)
+                .expect("add texture ok");
+            self.egui_render_pass.update_buffers(
+                &self.device,
+                &self.queue,
+                &paint_jobs,
+                &screen_descriptor,
+            );
+
+            // Record all render passes.
+            self.egui_render_pass
+                .execute(&mut encoder, &view, &paint_jobs, &screen_descriptor, None)
                 .unwrap();
         }
 
@@ -1080,8 +1037,13 @@ impl Renderer {
         Ok(())
     }
 
+    pub fn begin_ui_frame(&mut self) -> egui::Context {
+        self.egui_platform.begin_frame();
+        self.egui_platform.context()
+    }
+
     pub fn update_time(&mut self, time: std::time::Duration) {
-        self.imgui.update_time(time);
+        // todo!()
     }
 
     pub fn update_random_seed(&mut self, seed: u32) {
@@ -1146,25 +1108,14 @@ impl Renderer {
             .write_buffer(&self.settings_buffer, 0, bytemuck::bytes_of(&settings));
     }
 
-    pub fn get_frame(&mut self) -> &mut imgui::Ui {
-        self.imgui.get_frame()
-    }
-
-    pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) {
-        self.imgui
-            .platform
-            .handle_event(self.imgui.imgui.io_mut(), &self.window, event);
+    pub fn handle_input<T>(&mut self, event: &winit::event::Event<T>) -> bool {
+        let result = self.egui_platform.captures_event(event);
+        self.egui_platform.handle_event(event);
+        result
     }
 
     pub fn set_enable_gauss(&mut self, enabled: bool) {
         self.gauss_enabled = enabled;
-    }
-
-    pub fn want_mouse_input(&self) -> bool {
-        self.imgui.imgui.io().want_capture_mouse
-    }
-    pub fn want_keyboard_input(&self) -> bool {
-        self.imgui.imgui.io().want_capture_keyboard
     }
 
     pub fn update_materials(&mut self, materials: &[MaterialDTO]) {

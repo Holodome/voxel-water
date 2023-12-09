@@ -6,6 +6,7 @@ use crate::perlin::Perlin;
 use crate::renderer::{MaterialDTO, SettingsDTO};
 use crate::renderer::{Renderer, WorldDTO};
 use crate::xorshift32::{self, Xorshift32, Xorshift32Seed};
+use egui_winit_platform::Platform;
 use rand::SeedableRng;
 use winit::{
     event::*,
@@ -133,9 +134,7 @@ impl App {
                 self.input.handle_key_event(*key_ev);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if !self.renderer.want_mouse_input() {
-                    self.input.handle_mouse_button(*state, *button);
-                }
+                self.input.handle_mouse_button(*state, *button);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.input.handle_mouse_move(*position);
@@ -200,119 +199,183 @@ impl App {
             camera_was_changed = true;
         }
 
-        {
-            let ui = unsafe {
-                std::mem::transmute::<&mut imgui::Ui, &'static mut imgui::Ui>(
-                    self.renderer.get_frame(),
-                )
-            };
-            let renderer = &mut self.renderer;
-            let window = ui.window("Settings");
-            window
-                .size([400.0, 400.0], imgui::Condition::FirstUseEver)
-                .position([0.0, 0.0], imgui::Condition::FirstUseEver)
-                .build(|| {
-                    let mut was_changed = false;
-                    ui.text(format!("Frame time: {:?}", time_delta));
-                    ui.checkbox("sim", &mut self.sim_enabled);
-                    if imgui::Drag::new("bounce count")
-                        .range(0, 128)
-                        .build(ui, &mut self.settings.max_bounce_count)
-                    {
-                        was_changed = true;
-                    }
-                    if imgui::Drag::new("max distance")
-                        .range(0, 128)
-                        .build(ui, &mut self.settings.maximum_traversal_distance)
-                    {
-                        was_changed = true;
-                    }
-                    if ui.checkbox("Enable reproject", &mut self.settings.enable_reproject) {
-                        was_changed = true;
-                    }
-                    if was_changed {
-                        renderer.update_settings(self.settings.as_dto());
-                    }
-                    if ui.checkbox("Enable gauss", &mut self.settings.enable_gauss) {
-                        renderer.set_enable_gauss(self.settings.enable_gauss);
-                    }
-                    if imgui::Drag::new("camera positon")
-                        .build_array(ui, &mut self.camera.position_as_slice())
-                    {
-                        self.camera.update_view_matrix();
-                        camera_was_changed = true;
-                    }
-                    let mut pitch = self.camera.pitch_mut().to_degrees();
-                    if imgui::Drag::new("camera pitch").build(ui, &mut pitch) {
-                        *self.camera.pitch_mut() = pitch.to_radians();
-                        self.camera.update_view_matrix();
-                        camera_was_changed = true;
-                    }
-                    let mut yaw = self.camera.yaw_mut().to_degrees();
-                    if imgui::Drag::new("camera yaw").build(ui, &mut yaw) {
-                        *self.camera.yaw_mut() = yaw.to_radians();
-                        self.camera.update_view_matrix();
-                        camera_was_changed = true;
-                    }
+        let egui_ctx = self.renderer.begin_ui_frame();
+        egui::Window::new("Settings").show(&egui_ctx, |ui| {
+            let mut was_changed = false;
+            ui.label(format!("Frame time: {:?}", time_delta));
+            ui.checkbox(&mut self.sim_enabled, "sim");
+            ui.horizontal(|ui| {
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut self.settings.max_bounce_count)
+                            .clamp_range(0..=128),
+                    )
+                    .dragged()
+                {
+                    was_changed = true;
+                }
+                ui.label("bounce count");
+            });
+            ui.horizontal(|ui| {
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut self.settings.maximum_traversal_distance)
+                            .clamp_range(0..=128),
+                    )
+                    .dragged()
+                {
+                    was_changed = true;
+                }
+                ui.label("max distance");
+            });
+            if ui
+                .checkbox(&mut self.settings.enable_reproject, "enable reproject")
+                .clicked()
+            {
+                was_changed = true;
+            }
+            if was_changed {
+                self.renderer.update_settings(self.settings.as_dto());
+            }
 
-                    let mut materials_changed = false;
-                    match &mut self.materials[2] {
-                        Material::Dielectric {
-                            albedo,
-                            refractive_index,
-                        } => {
-                            materials_changed |= ui
-                                .slider_config("water color", 0.0, 1.0)
-                                .build_array(&mut albedo.as_mut_slice());
-                            materials_changed |= imgui::Drag::new("water ior")
-                                .speed(0.05)
-                                .build(ui, refractive_index);
-                        }
-                        _ => {}
-                    }
-                    imgui::Drag::new("water source coord")
-                        .range(0, self.map.y())
-                        .build_array(ui, &mut self.water_source_coord);
-                    ui.checkbox("water source enable", &mut self.source_enabled);
-                    if ui.button("reset scene") {
-                        let mut rng =
-                            Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
-                        let mut perlin = Perlin::new(&mut rng);
-                        let map = Map::with_perlin(40, 20, 40, &mut perlin);
-                        let map = WaterSim::new(map);
-                        self.map = map;
+            if ui
+                .checkbox(&mut self.settings.enable_gauss, "enable gauss")
+                .clicked()
+            {
+                self.renderer.set_enable_gauss(self.settings.enable_gauss);
+            }
+            ui.horizontal(|ui| {
+                if ui
+                    .add(egui::DragValue::new(
+                        &mut self.camera.position_as_slice()[0],
+                    ))
+                    .dragged()
+                {
+                    print!("her");
+                    camera_was_changed = true;
+                    self.camera.update_view_matrix();
+                }
+                if ui
+                    .add(egui::DragValue::new(
+                        &mut self.camera.position_as_slice()[1],
+                    ))
+                    .dragged()
+                {
+                    camera_was_changed = true;
+                    self.camera.update_view_matrix();
+                }
+                if ui
+                    .add(egui::DragValue::new(
+                        &mut self.camera.position_as_slice()[2],
+                    ))
+                    .dragged()
+                {
+                    camera_was_changed = true;
+                    self.camera.update_view_matrix();
+                }
 
-                        let materials = vec![
-                            Material::diffuse(Vector3::new(0.0, 0.0, 0.0)),
-                            Material::diffuse(Vector3::new(
-                                0.44313725490196076,
-                                0.6666666666666666,
-                                0.20392156862745098,
-                            )),
-                            Material::dielectric(Vector3::new(0.5, 0.5, 0.9), 2.045),
-                            Material::metal(
-                                Vector3::new(
-                                    0.6274509803921569,
-                                    0.3568627450980392,
-                                    0.3254901960784314,
-                                ),
-                                0.5,
-                            ),
-                        ];
-                        self.materials = materials;
-                        renderer.update_map(self.map.as_dto());
-                        materials_changed = true;
-                    }
-                    if materials_changed {
-                        let material_dto = self
-                            .materials
-                            .iter()
-                            .map(|it| it.as_dto())
-                            .collect::<Vec<MaterialDTO>>();
-                        renderer.update_materials(&material_dto);
-                    }
-                });
-        };
+                ui.label("camera position");
+            });
+            ui.horizontal(|ui| {
+                let mut pitch = self.camera.pitch_mut().to_degrees();
+                if ui.add(egui::DragValue::new(&mut pitch)).dragged() {
+                    *self.camera.pitch_mut() = pitch.to_radians();
+                    self.camera.update_view_matrix();
+                    camera_was_changed = true;
+                }
+                ui.label("camera pitch");
+            });
+            ui.horizontal(|ui| {
+                let mut yaw = self.camera.yaw_mut().to_degrees();
+                if ui.add(egui::DragValue::new(&mut yaw)).dragged() {
+                    *self.camera.yaw_mut() = yaw.to_radians();
+                    self.camera.update_view_matrix();
+                    camera_was_changed = true;
+                }
+                ui.label("camera yaw");
+            });
+            let mut materials_changed = false;
+            match &mut self.materials[2] {
+                Material::Dielectric {
+                    albedo,
+                    refractive_index,
+                } => {
+                    ui.horizontal(|ui| {
+                        materials_changed |= ui
+                            .add(egui::Slider::new(&mut albedo.x, 0.0..=1.0))
+                            .dragged();
+                        materials_changed |= ui
+                            .add(egui::Slider::new(&mut albedo.y, 0.0..=1.0))
+                            .dragged();
+                        materials_changed |= ui
+                            .add(egui::Slider::new(&mut albedo.z, 0.0..=1.0))
+                            .dragged();
+                        ui.label("water color");
+                    });
+                    ui.horizontal(|ui| {
+                        materials_changed |= ui
+                            .add(egui::DragValue::new(refractive_index).speed(0.05))
+                            .dragged();
+                        ui.label("water ior");
+                    });
+                }
+                _ => {}
+            }
+            ui.horizontal(|ui| {
+                materials_changed |= ui
+                    .add(egui::Slider::new(
+                        &mut self.water_source_coord[0],
+                        1..=self.map.x() - 2,
+                    ))
+                    .dragged();
+                materials_changed |= ui
+                    .add(egui::Slider::new(
+                        &mut self.water_source_coord[1],
+                        1..=self.map.y() - 2,
+                    ))
+                    .dragged();
+                materials_changed |= ui
+                    .add(egui::Slider::new(
+                        &mut self.water_source_coord[2],
+                        1..=self.map.z() - 2,
+                    ))
+                    .dragged();
+                ui.label("water source coord");
+            });
+            ui.checkbox(&mut self.source_enabled, "water source enable");
+            if ui.button("reset scene").clicked() {
+                let mut rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
+                let mut perlin = Perlin::new(&mut rng);
+                let map = Map::with_perlin(40, 20, 40, &mut perlin);
+                let map = WaterSim::new(map);
+                self.map = map;
+
+                let materials = vec![
+                    Material::diffuse(Vector3::new(0.0, 0.0, 0.0)),
+                    Material::diffuse(Vector3::new(
+                        0.44313725490196076,
+                        0.6666666666666666,
+                        0.20392156862745098,
+                    )),
+                    Material::dielectric(Vector3::new(0.5, 0.5, 0.9), 2.045),
+                    Material::metal(
+                        Vector3::new(0.6274509803921569, 0.3568627450980392, 0.3254901960784314),
+                        0.5,
+                    ),
+                ];
+                self.materials = materials;
+                self.renderer.update_map(self.map.as_dto());
+                materials_changed = true;
+            }
+            if materials_changed {
+                let material_dto = self
+                    .materials
+                    .iter()
+                    .map(|it| it.as_dto())
+                    .collect::<Vec<MaterialDTO>>();
+                self.renderer.update_materials(&material_dto);
+            }
+        });
 
         self.renderer
             .update_camera(&self.camera.as_dto(), camera_was_changed);
@@ -330,6 +393,11 @@ impl App {
         let mut is_initialized = false;
         event_loop.run(move |event, _, control_flow| {
             control_flow.set_poll();
+            if is_initialized {
+                if self.renderer.handle_input(&event) {
+                    return;
+                }
+            }
             match event {
                 Event::WindowEvent {
                     ref event,
@@ -347,9 +415,6 @@ impl App {
                     }
                 }
                 _ => {}
-            }
-            if is_initialized {
-                self.renderer.handle_input(&event);
             }
         });
     }

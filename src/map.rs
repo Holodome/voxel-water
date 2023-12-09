@@ -1,7 +1,6 @@
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::MapDTO;
-use rand::prelude::SliceRandom;
 use rand::Rng;
 
 #[repr(u8)]
@@ -103,8 +102,14 @@ impl WaterSim {
         }
     }
 
+    pub fn x(&self) -> usize {
+        self.x
+    }
     pub fn y(&self) -> usize {
         self.y
+    }
+    pub fn z(&self) -> usize {
+        self.z
     }
 
     pub fn at(&self, x: usize, y: usize, z: usize) -> Cell {

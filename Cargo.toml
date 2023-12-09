@@ -9,19 +9,18 @@ edition = "2021"
 env_logger = "0.10.0"
 log = "0.4.19"
 wgpu = "0.17"
-winit = "0.27"
+winit = "0.28"
 cfg-if = "1"
 pollster = "0.3.0"
 bytemuck = { version = "1.13.1", features = ["derive"] }
 nalgebra = { version = "0.32.3", features = ["bytemuck"] }
 rand = "0.8.5"
-num = "0.4.1"
 getrandom = { version = "0.2.10", features = ["js"]}
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
-imgui-wgpu = "0.24.0"
-imgui = "0.11.0"
-imgui-winit-support = "0.11"
 rand_core = "0.6.4"
+egui_wgpu_backend = "0.26"
+egui = "0.23"
+egui_winit_platform = "0.20"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
@@ -34,7 +33,6 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Element",
 ]}
-imgui = { version = "0.11.0", features = ["wasm"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
