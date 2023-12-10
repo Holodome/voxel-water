@@ -28,6 +28,13 @@ pub async fn run() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_inner_size(winit::dpi::LogicalSize::new(960, 720))
+        .with_title({
+            #[cfg(feature = "russian")]
+            let t = "Визуализация воды с использованием вокселей";
+            #[cfg(not(feature = "russian"))]
+            let t = "voxel water";
+            t
+        })
         .build(&event_loop)
         .unwrap();
 

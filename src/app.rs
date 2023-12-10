@@ -203,7 +203,14 @@ impl App {
         }
 
         let egui_ctx = self.renderer.begin_ui_frame();
-        egui::Window::new("Settings").show(&egui_ctx, |ui| {
+        {
+            #[cfg(feature = "russian")]
+            let w = egui::Window::new("Настройки");
+            #[cfg(not(feature = "russian"))]
+            let w = egui::Window::new("Settings");
+            w
+        }
+        .show(&egui_ctx, |ui| {
             let mut was_changed = false;
             #[cfg(feature = "russian")]
             ui.label(format!("Время кадра: {:?}", time_delta));
@@ -445,6 +452,40 @@ impl App {
                     .collect::<Vec<MaterialDTO>>();
                 self.renderer.update_materials(&material_dto);
             }
+        });
+
+        {
+            #[cfg(feature = "russian")]
+            let w = egui::Window::new("Справка");
+            #[cfg(not(feature = "russian"))]
+            let w = egui::Window::new("Reference");
+            w
+        }
+        .show(&egui_ctx, |ui| {
+            #[cfg(feature = "russian")]
+            ui.label("трассировка лучей с воксельной сценой");
+            #[cfg(not(feature = "russian"))]
+            ui.label("ray tracing voxel scene");
+
+            #[cfg(feature = "russian")]
+            ui.label("движение: WASD");
+            #[cfg(not(feature = "russian"))]
+            ui.label("movement: WASD");
+
+            #[cfg(feature = "russian")]
+            ui.label("подъем: <пробел>");
+            #[cfg(not(feature = "russian"))]
+            ui.label("up: <space>");
+
+            #[cfg(feature = "russian")]
+            ui.label("спуск: C");
+            #[cfg(not(feature = "russian"))]
+            ui.label("down: C");
+
+            #[cfg(feature = "russian")]
+            ui.label("для движения камеры зажать ЛКМ и перемещать мышь");
+            #[cfg(not(feature = "russian"))]
+            ui.label("to move camera hold left mouse button and move mouse");
         });
 
         self.renderer
