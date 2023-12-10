@@ -56,14 +56,14 @@ impl Camera {
         self.position.y += translation.y;
 
         let translation = Vector3::new(translation.x, 0.0, translation.z);
-        let rotation = Quat::from_euler_angles(self.yaw, self.pitch, 0.0);
+        let rotation = Quat::from_euler_angles(self.pitch, self.yaw, 0.0);
         let actual_translation = rotation.transform_vector(&translation);
         self.position += actual_translation;
         self.update_view_matrix();
     }
 
     pub fn update_view_matrix(&mut self) {
-        let rotation = Matrix4::from_euler_angles(self.yaw, self.pitch, 0.0);
+        let rotation = Matrix4::from_euler_angles(self.pitch, self.yaw, 0.0);
         self.view_matrix = Matrix4::new_translation(&self.position) * rotation;
     }
 

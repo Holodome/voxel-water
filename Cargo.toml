@@ -34,6 +34,9 @@ web-sys = { version = "0.3", features = [
     "Element",
 ]}
 
+[features]
+russian = []
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

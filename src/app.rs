@@ -198,59 +198,96 @@ impl App {
             let delta = self.input.mouse_delta();
             let pitch_d = delta.x as f32 / 500.0;
             let yaw_d = delta.y as f32 / 500.0;
-            self.camera.rotate(-yaw_d, -pitch_d);
+            self.camera.rotate(-pitch_d, -yaw_d);
             camera_was_changed = true;
         }
 
         let egui_ctx = self.renderer.begin_ui_frame();
         egui::Window::new("Settings").show(&egui_ctx, |ui| {
             let mut was_changed = false;
+            #[cfg(feature = "russian")]
+            ui.label(format!("Время кадра: {:?}", time_delta));
+            #[cfg(not(feature = "russian"))]
             ui.label(format!("Frame time: {:?}", time_delta));
-            ui.checkbox(&mut self.sim_enabled, "sim");
+
+            #[cfg(feature = "russian")]
+            ui.checkbox(&mut self.sim_enabled, "включить симуляцию");
+            #[cfg(not(feature = "russian"))]
+            ui.checkbox(&mut self.sim_enabled, "sim enabled");
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.sim_divider).clamp_range(1..=32));
+
+                #[cfg(feature = "russian")]
+                ui.label("частота симуляции");
+                #[cfg(not(feature = "russian"))]
                 ui.label("sim divider");
             });
             ui.horizontal(|ui| {
-                if ui
+                was_changed |= ui
                     .add(
                         egui::DragValue::new(&mut self.settings.max_bounce_count)
                             .clamp_range(0..=128),
                     )
-                    .dragged()
-                {
-                    was_changed = true;
-                }
+                    .dragged();
+
+                #[cfg(feature = "russian")]
+                ui.label("число отскоков");
+                #[cfg(not(feature = "russian"))]
                 ui.label("bounce count");
             });
             ui.horizontal(|ui| {
-                if ui
+                was_changed |= ui
                     .add(
                         egui::DragValue::new(&mut self.settings.maximum_traversal_distance)
                             .clamp_range(0..=128),
                     )
-                    .dragged()
-                {
-                    was_changed = true;
-                }
+                    .dragged();
+
+                #[cfg(feature = "russian")]
+                ui.label("дальность отрисовки");
+                #[cfg(not(feature = "russian"))]
                 ui.label("max distance");
             });
-            if ui
-                .checkbox(&mut self.settings.enable_reproject, "enable reproject")
-                .clicked()
+
+            #[cfg(feature = "russian")]
             {
-                was_changed = true;
+                was_changed |= ui
+                    .checkbox(&mut self.settings.enable_reproject, "включить репроекцию")
+                    .clicked();
             }
+            #[cfg(not(feature = "russian"))]
+            {
+                was_changed |= ui
+                    .checkbox(&mut self.settings.enable_reproject, "enable reproject")
+                    .clicked();
+            }
+
             if was_changed {
                 self.renderer.update_settings(self.settings.as_dto());
             }
 
-            if ui
-                .checkbox(&mut self.settings.enable_gauss, "enable gauss")
-                .clicked()
+            #[cfg(feature = "russian")]
             {
-                self.renderer.set_enable_gauss(self.settings.enable_gauss);
+                if ui
+                    .checkbox(
+                        &mut self.settings.enable_gauss,
+                        "включить размытие по Гауссу",
+                    )
+                    .clicked()
+                {
+                    self.renderer.set_enable_gauss(self.settings.enable_gauss);
+                }
             }
+            #[cfg(not(feature = "russian"))]
+            {
+                if ui
+                    .checkbox(&mut self.settings.enable_gauss, "enable gauss")
+                    .clicked()
+                {
+                    self.renderer.set_enable_gauss(self.settings.enable_gauss);
+                }
+            }
+
             ui.horizontal(|ui| {
                 if ui
                     .add(egui::DragValue::new(
@@ -258,7 +295,6 @@ impl App {
                     ))
                     .dragged()
                 {
-                    print!("her");
                     camera_was_changed = true;
                     self.camera.update_view_matrix();
                 }
@@ -281,6 +317,9 @@ impl App {
                     self.camera.update_view_matrix();
                 }
 
+                #[cfg(feature = "russian")]
+                ui.label("координаты камеры");
+                #[cfg(not(feature = "russian"))]
                 ui.label("camera position");
             });
             ui.horizontal(|ui| {
@@ -290,6 +329,9 @@ impl App {
                     self.camera.update_view_matrix();
                     camera_was_changed = true;
                 }
+                #[cfg(feature = "russian")]
+                ui.label("тангаж камеры");
+                #[cfg(not(feature = "russian"))]
                 ui.label("camera pitch");
             });
             ui.horizontal(|ui| {
@@ -299,6 +341,9 @@ impl App {
                     self.camera.update_view_matrix();
                     camera_was_changed = true;
                 }
+                #[cfg(feature = "russian")]
+                ui.label("рысканье камеры");
+                #[cfg(not(feature = "russian"))]
                 ui.label("camera yaw");
             });
             let mut materials_changed = false;
@@ -317,12 +362,18 @@ impl App {
                         materials_changed |= ui
                             .add(egui::Slider::new(&mut albedo.z, 0.0..=1.0))
                             .dragged();
+                        #[cfg(feature = "russian")]
+                        ui.label("цвет воды");
+                        #[cfg(not(feature = "russian"))]
                         ui.label("water color");
                     });
                     ui.horizontal(|ui| {
                         materials_changed |= ui
                             .add(egui::DragValue::new(refractive_index).speed(0.05))
                             .dragged();
+                        #[cfg(feature = "russian")]
+                        ui.label("коэффициент преломления воды");
+                        #[cfg(not(feature = "russian"))]
                         ui.label("water ior");
                     });
                 }
@@ -347,10 +398,22 @@ impl App {
                         1..=self.map.z() - 2,
                     ))
                     .dragged();
+                #[cfg(feature = "russian")]
+                ui.label("координаты источника воды");
+                #[cfg(not(feature = "russian"))]
                 ui.label("water source coord");
             });
+            #[cfg(feature = "russian")]
+            ui.checkbox(&mut self.source_enabled, "включить источник воды");
+            #[cfg(not(feature = "russian"))]
             ui.checkbox(&mut self.source_enabled, "water source enable");
-            if ui.button("reset scene").clicked() {
+            if {
+                #[cfg(feature = "russian")]
+                let result = ui.button("сбросить сцену").clicked();
+                #[cfg(not(feature = "russian"))]
+                let result = ui.button("reset scene").clicked();
+                result
+            } {
                 let mut rng = Xorshift32::from_seed(Xorshift32Seed(rand::random::<[u8; 4]>()));
                 let mut perlin = Perlin::new(&mut rng);
                 let map = Map::with_perlin(40, 20, 40, &mut perlin);
