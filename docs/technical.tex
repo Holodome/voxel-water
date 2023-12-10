@@ -79,14 +79,42 @@ Metal~\cite{Metal}, Vulkan~\cite{Vulkan}, OpenGLES~\cite{OpenGLES}, WebGL~\cite{
 В ходе отрисовки каждого кадра имеется доступ к буферам прошлого кадра,
 что позволяет выполнять обратную репроекцию.
 
+\section{Реализация материала воды}
+
+В листинге~\ref{lst:water} приведена реализация материала водыы. Также в программе реализованы
+материалы матовой поверхности и поверхности метала аналогично тем, что описаны в~\cite{RTW}.
+Функция \verb|schlick| выполняет аппроксимацию Шлика коэффициента вклада фактора Френеля в 
+зеркальное отражение.
+
+\begin{lstlisting}[caption={Реализация материала воды},label={lst:water},frame=single]
+var refraction_ratio = material.refractive_index;
+let rn = dot(ray.direction, hrec.normal);
+if rn <= 0.0 {
+    refraction_ratio = 1.0 / refraction_ratio;
+}
+let cos_theta = min(-rn, 1.0);
+let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+if refraction_ratio * sin_theta > 1.0 || 
+   schlick(cos_theta, refraction_ratio) > random_f32() {
+    srec.direction = reflect(ray.direction, hrec.normal);
+    srec.attenuation = vec3f(1.0);
+} else {
+    srec.direction = refract(ray.direction, hrec.normal, 
+                             refraction_ratio);
+    srec.attenuation = material.albedo;
+}
+\end{lstlisting}
+
 \section{Дополнительные алгоритмы}
 
 При реализации программы также были реализованны дополнительные алгоритмы, рассмотрение 
-которых выходит ра рамки данной работы. Список алгоритмов и их назначения:
+которых выходит за рамки данной работы. Список алгоритмов и их назначения:
 \begin{itemize}
     \item \verb|xorshift32|~\cite{xorshift} -- алгоритм генерации случайных чисел, используемый в шейдерах;
     \item шум Перлина~\cite{perlin} -- используется для генерации ландшафта;
-    \item размытие по Гауссу -- используется для уменьше количества шума на изображении.
+    \item размытие по Гауссу -- используется для уменьше количества шума на изображении;
+    \item алгоритм симуляции распространения воды.
 \end{itemize}
 
 \section{Описание интерфейса программы}
@@ -112,7 +140,6 @@ Metal~\cite{Metal}, Vulkan~\cite{Vulkan}, OpenGLES~\cite{OpenGLES}, WebGL~\cite{
     \item перемещения камеры и ее поворот, выраженный в углах рысканья и тангажа;
     \item параметры воды -- коэффицент преломления света и цвет.
 \end{itemize}
-
 
 \section{Примеры работы программы}
 

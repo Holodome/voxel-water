@@ -61,6 +61,11 @@ pub struct App {
 
     water_source_coord: [usize; 3],
     source_enabled: bool,
+
+    timing_active: bool,
+    timing_counter: usize,
+    timing_target: usize,
+    timing_start: instant::Instant,
 }
 
 impl App {
@@ -121,6 +126,11 @@ impl App {
             sim_divider: 10,
             water_source_coord: [20, 19, 20],
             source_enabled: false,
+
+            timing_active: false,
+            timing_counter: 0,
+            timing_target: 0,
+            timing_start: instant::Instant::now(),
         }
     }
 
@@ -147,6 +157,17 @@ impl App {
     }
 
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
+        if self.timing_active {
+            self.timing_counter += 1;
+            if self.timing_counter == self.timing_target {
+                self.timing_active = false;
+                let now = instant::Instant::now();
+                let diff = now.duration_since(self.timing_start);
+                let nanos = diff.as_nanos() as f64;
+                println!("{:?}", nanos / self.timing_target as f64);
+            }
+        }
+
         self.frame_counter += 1;
         if self.frame_counter % self.sim_divider == 0 && self.sim_enabled {
             if self.source_enabled {
@@ -451,6 +472,15 @@ impl App {
                     .map(|it| it.as_dto())
                     .collect::<Vec<MaterialDTO>>();
                 self.renderer.update_materials(&material_dto);
+            }
+
+            {
+                if ui.button("start timing").clicked() {
+                    self.timing_active = true;
+                    self.timing_counter = 0;
+                    self.timing_target = 100;
+                    self.timing_start = instant::Instant::now();
+                }
             }
         });
 

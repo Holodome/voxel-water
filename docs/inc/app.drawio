@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-12-09T18:32:32.772Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36" etag="j6XJ6wxgmwN2jEOJU0jh" version="22.1.7" type="device">
+<mxfile host="app.diagrams.net" modified="2023-12-10T16:24:49.151Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36" etag="9iIPYApoh-wmiF3f7Luy" version="22.1.7" type="device">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1">
     <mxGraphModel dx="954" dy="617" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -52,7 +52,7 @@
         <mxCell id="Vov0EzuTKuRAHN_TWs5X-54" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="Vov0EzuTKuRAHN_TWs5X-23" target="Vov0EzuTKuRAHN_TWs5X-25" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="MvOk6W_e_Ivg_tK6j7mt-0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="Vov0EzuTKuRAHN_TWs5X-23" target="Vov0EzuTKuRAHN_TWs5X-25">
+        <mxCell id="MvOk6W_e_Ivg_tK6j7mt-0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="Vov0EzuTKuRAHN_TWs5X-23" target="Vov0EzuTKuRAHN_TWs5X-25" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="Vov0EzuTKuRAHN_TWs5X-23" value="Для каждого кадра" style="shape=loopLimit;whiteSpace=wrap;html=1;rotation=0;horizontal=1;direction=west;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
@@ -140,7 +140,7 @@
             <mxPoint x="75" y="21" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Vov0EzuTKuRAHN_TWs5X-45" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;i &amp;lt; &lt;br&gt;MAX_BOUNCE_COUNT&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
+        <mxCell id="Vov0EzuTKuRAHN_TWs5X-45" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;i &amp;lt; &lt;br&gt;MAX_BOUNCE_COUNT&lt;br&gt;&lt;br&gt;&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="305" y="250" width="140" height="80" as="geometry" />
         </mxCell>
         <mxCell id="Vov0EzuTKuRAHN_TWs5X-58" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="Vov0EzuTKuRAHN_TWs5X-56" target="Vov0EzuTKuRAHN_TWs5X-18" edge="1">
