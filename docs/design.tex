@@ -32,12 +32,12 @@ $MAX\_BOUNCE\_COUNT$ -- это целочисленная константа, о
 отскоков одного луча. Под цветом понимается
 трехмерный вектор в формате RGB в диапозоне $[0, 1)$. $rgb(0,0,0)$ -- функция черного цвета. 
 
-\includeimage
-    {app_algo}
-    {f}
-    {H}
-    {0.70\textwidth}
-    {Алгоритм отрисовки}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=120mm]{inc/pdf/app_algo}
+	\caption{Схема алгоритма отрисовки}
+	\label{img:app_algo}
+\end{figure}
 
 Алгоритм трассировки лучей реализуется в фрагментном шейдере.
 Вычисление вектора направления луча производится в вершинном
@@ -71,12 +71,12 @@ vec3 ray_origin = vec3(view_matrix[3][0], view_matrix[3][1], view_matrix[3][2]);
 На рисунке~\ref{img:rrc} представлена схема алгоритма кэширования обратной
 репроекции.
 
-\includeimage
-    {rrc}
-    {f}
-    {H}
-    {0.50\textwidth}
-    {Алгоритм кеширования обратной репроекции}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=90mm]{inc/pdf/rrc}
+	\caption{Схема алгоритма кеширования обратной репроекции}
+	\label{img:rrc}
+\end{figure}
 
 В листинге~\ref{lst:reproject} приведен псевдокод процерования точки в пространстве 
 текущего кадра на пространство другого кадра.
