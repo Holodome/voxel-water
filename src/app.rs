@@ -57,6 +57,7 @@ pub struct App {
     last_time: instant::Instant,
     frame_counter: usize,
     sim_enabled: bool,
+    sim_divider: usize,
 
     water_source_coord: [usize; 3],
     source_enabled: bool,
@@ -117,6 +118,7 @@ impl App {
             last_time: start_time,
             frame_counter: 0,
             sim_enabled: false,
+            sim_divider: 10,
             water_source_coord: [20, 19, 20],
             source_enabled: false,
         }
@@ -146,7 +148,7 @@ impl App {
 
     pub fn render(&mut self, control_flow: &mut ControlFlow) {
         self.frame_counter += 1;
-        if self.frame_counter % 20 == 0 && self.sim_enabled {
+        if self.frame_counter % self.sim_divider == 0 && self.sim_enabled {
             if self.source_enabled {
                 self.map.set_mass(
                     self.water_source_coord[0],
@@ -205,6 +207,10 @@ impl App {
             let mut was_changed = false;
             ui.label(format!("Frame time: {:?}", time_delta));
             ui.checkbox(&mut self.sim_enabled, "sim");
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut self.sim_divider).clamp_range(1..=32));
+                ui.label("sim divider");
+            });
             ui.horizontal(|ui| {
                 if ui
                     .add(
