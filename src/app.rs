@@ -39,6 +39,7 @@ impl Settings {
             max_bounce_count: self.max_bounce_count,
             maximum_traversal_distance: self.maximum_traversal_distance,
             reproject: if self.enable_reproject { 1.0 } else { 0.0 },
+            pad: 0.0,
         }
     }
 }

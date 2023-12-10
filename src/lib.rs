@@ -34,7 +34,7 @@ pub async fn run() {
     #[cfg(target_arch = "wasm32")]
     {
         use winit::dpi::PhysicalSize;
-        window.set_inner_size(PhysicalSize::new(450, 400));
+        window.set_inner_size(PhysicalSize::new(960 * 2, 720 * 2));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()

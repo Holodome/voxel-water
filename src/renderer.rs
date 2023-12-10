@@ -27,6 +27,7 @@ pub struct SettingsDTO {
     pub max_bounce_count: i32,
     pub maximum_traversal_distance: i32,
     pub reproject: f32,
+    pub pad: f32,
 }
 
 #[repr(C)]
@@ -36,6 +37,8 @@ pub struct MaterialDTO {
     pub fuzz: f32,
     pub refractive_index: f32,
     pub kind: i32,
+    pub pad0: f32,
+    pub pad1: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -310,6 +313,8 @@ impl Renderer {
                 fuzz: 0.0,
                 refractive_index: 0.0,
                 kind: 0,
+                pad0: 0.0,
+                pad1: 0.0,
             });
             for (i, it) in dto.materials.iter().enumerate() {
                 v[i] = it.clone();
@@ -381,7 +386,7 @@ impl Renderer {
             contents: bytemuck::bytes_of(&dto.camera.view_matrix),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let texture_size_v = Vector2::new(size.width as f32, size.height as f32);
+        let texture_size_v = Vector4::new(size.width as f32, size.height as f32, 0.0, 0.0);
         let texture_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("texture size"),
             contents: bytemuck::bytes_of(&texture_size_v),
@@ -1126,6 +1131,8 @@ impl Renderer {
                 fuzz: 0.0,
                 refractive_index: 0.0,
                 kind: 0,
+                pad0: 0.0,
+                pad1: 0.0,
             });
             for (i, it) in materials.iter().enumerate() {
                 v[i] = it.clone();

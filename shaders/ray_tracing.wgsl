@@ -10,7 +10,8 @@ const VOXEL_SIZE: f32 = 0.5;
 struct Settings {
     max_bounce_count: i32,
     maximum_traversal_distance: i32,
-    reproject: f32
+    reproject: f32,
+    pad: f32
 };
 
 struct Onb {
@@ -50,7 +51,9 @@ struct Material {
     albedo: vec3f,
     fuzz: f32,
     refractive_index: f32,
-    kind: i32
+    kind: i32,
+    pad0: f32,
+    pad1: f32
 };
 
 struct Ray {

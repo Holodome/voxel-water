@@ -45,12 +45,16 @@ impl Material {
                 fuzz: 0.0,
                 refractive_index: 0.0,
                 kind: self.kind(),
+                pad0: 0.0,
+                pad1: 0.0,
             },
             Material::Metal { albedo, fuzz } => MaterialDTO {
                 albedo: *albedo,
                 fuzz: *fuzz,
                 refractive_index: 0.0,
                 kind: self.kind(),
+                pad0: 0.0,
+                pad1: 0.0,
             },
             Material::Dielectric {
                 albedo,
@@ -60,6 +64,8 @@ impl Material {
                 fuzz: 0.0,
                 refractive_index: *refractive_index,
                 kind: self.kind(),
+                pad0: 0.0,
+                pad1: 0.0,
             },
         }
     }
