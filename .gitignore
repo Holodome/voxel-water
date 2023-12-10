@@ -28,3 +28,4 @@ cmake-build-release
 !docs/biblio.bib
 docs/svg-inkscape
 *.main.synctex(busy)
+*.synctex(busy)
