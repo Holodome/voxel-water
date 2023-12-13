@@ -1,12 +1,11 @@
 use crate::camera::Camera;
-use crate::map::{Cell, Map, WaterSim};
+use crate::map::{Map, WaterSim};
 use crate::materials::Material;
 use crate::math::*;
 use crate::perlin::Perlin;
 use crate::renderer::{MaterialDTO, SettingsDTO};
 use crate::renderer::{Renderer, WorldDTO};
 use crate::xorshift32::{self, Xorshift32, Xorshift32Seed};
-use egui_winit_platform::Platform;
 use rand::SeedableRng;
 use winit::{
     event::*,
@@ -187,7 +186,6 @@ impl App {
         self.last_time = new_time;
         let rng_seed = new_time.duration_since(self.start_time).as_millis();
         self.renderer.update_random_seed(rng_seed as u32);
-        self.renderer.update_time(time_delta);
 
         let time_delta_s = (time_delta.as_micros() as f32) / 1_000_000.0;
         let mut dp = Vector3::zeros();

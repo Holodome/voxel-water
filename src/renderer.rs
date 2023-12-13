@@ -50,10 +50,10 @@ pub struct WorldDTO<'a> {
 }
 
 struct TargetTextures {
-    prev_color_texture: wgpu::Texture,
-    prev_normal_texture: wgpu::Texture,
-    prev_mat_texture: wgpu::Texture,
-    prev_offset_texture: wgpu::Texture,
+    _prev_color_texture: wgpu::Texture,
+    _prev_normal_texture: wgpu::Texture,
+    _prev_mat_texture: wgpu::Texture,
+    _prev_offset_texture: wgpu::Texture,
 
     prev_color_texture_view: wgpu::TextureView,
     prev_normal_texture_view: wgpu::TextureView,
@@ -116,10 +116,10 @@ impl TargetTextures {
         });
         let prev_offset_texture_view = prev_offset_texture.create_view(&Default::default());
         Self {
-            prev_color_texture,
-            prev_normal_texture,
-            prev_mat_texture,
-            prev_offset_texture,
+            _prev_color_texture: prev_color_texture,
+            _prev_normal_texture: prev_normal_texture,
+            _prev_mat_texture: prev_mat_texture,
+            _prev_offset_texture: prev_offset_texture,
 
             prev_color_texture_view,
             prev_normal_texture_view,
@@ -1045,10 +1045,6 @@ impl Renderer {
     pub fn begin_ui_frame(&mut self) -> egui::Context {
         self.egui_platform.begin_frame();
         self.egui_platform.context()
-    }
-
-    pub fn update_time(&mut self, time: std::time::Duration) {
-        // todo!()
     }
 
     pub fn update_random_seed(&mut self, seed: u32) {

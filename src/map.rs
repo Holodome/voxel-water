@@ -283,7 +283,7 @@ impl WaterSim {
                         self.new_mass[i] -= flow;
                         let i = self.index(x, y + 1, z);
                         self.new_mass[i] += flow;
-                        remaining_mass -= flow;
+                        // remaining_mass -= flow;
                     }
                 }
             }

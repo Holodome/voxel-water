@@ -10,8 +10,18 @@
 \renewcommand{\thetable}{\arabic{mytable}}
 \newcounter{myequation}
 \pretocmd{\equation}{\stepcounter{myequation}}{}{}
-\renewcommand{\theequation}{\arabic{equation}}
+\renewcommand{\theequation}{\arabic{myequation}}
 \renewcommand\labelitemi{---}
+
+\setenumerate[1]{label={ \arabic*)}}
+\NewBibliographyString{accessmode}
+\DeclareFieldFormat{url}{\bibstring{accessmode}\addcolon\space\url{#1}}
+\DeclareFieldFormat{title}{#1}
+\DefineBibliographyStrings{russian}{
+accessmode={Режим доступа:},
+urlseen={дата обращения:}
+}
+\captionsetup[table]{justification=raggedright,singlelinecheck=off}
 
 \bibliography{biblio}
 
@@ -19,11 +29,11 @@
 \renewcommand{\thelstlisting}{\arabic{lstlisting}}
 
 \makecourseworktitle
-    {Информатика, искусственный интеллект и системы управления}
+    {Информатика и системы управления}
     {Программное обеспечение ЭВМ и информационные технологии}
     {Визуализация воды с использованием вокселей}
     {Виноградов И. А./ИУ7-53Б} 
-    {Куров А. В.} 
+    {Волкова Л. Л} 
     {} 
 
 \maketableofcontents
